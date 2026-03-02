@@ -322,6 +322,7 @@ dependencies = [
  "futures-util",
  "http-body-util",
  "hyper",
+ "indexmap",
  "serde",
  "serde_yaml",
  "tar",

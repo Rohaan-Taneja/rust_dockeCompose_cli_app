@@ -3,6 +3,7 @@ use clap::Parser;
 
 use crate::{cli_commands_parser::validate_cli_commands::validate_command, cli_errors::CliErrors };
 pub mod cli_commands_parser;
+pub mod docker;
 
 pub mod yaml_parser;
 

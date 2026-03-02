@@ -2,14 +2,20 @@ version: '5.0.2'
 services:
 
   db-1 :  
+
+    # image from local docker or docker hub support only now
     image : rust_auth_build_with_health_check_curl_added
+
+    # build the current directory or a path (path we will add , after some setup)
     # build : .
     environment :
       - ver=8080
+      - ver2=8081
     ports : 
       - 8080:8080
 
-    healthcheck :
+  ## if health check is present then  conatinerInspectType would be heath , so we will poll the service utill it start , with this loop and polling details
+    healthcheck :   
       test: ["CMD", "curl", "-f", "http://localhost:8080/api/health/check"]
       interval : 10s
       timeout : 5s
@@ -17,13 +23,18 @@ services:
       start_period : 10s
 
 
-  # db-2 : 
-  #   # build : .
-  #   image : rust_auth_build_with_health_check_curl_added
-  #   environment :
-  #     - ver=8081
-  #   ports : 
-  #     - 8081:8080
+  db-2 : 
+    # build : .
+    image : rust_auth_build_with_health_check_curl_added
+    environment :
+      - ver=8081
+      # host_port:container_port
+    ports : 
+      - 8081:8080
+
+    depends_on :   
+      db-5:
+        condition : service_healthy
 
   db-3 : 
     build : .
@@ -34,7 +45,52 @@ services:
       - 8082:8080
 
     depends_on :   
+      db-4:
+        condition : service_healthy
+
+    
+    
+
+    
+  db-4 : 
+    # build : .
+    image : rust_auth_build_with_health_check_curl_added
+    environment :
+      - ver=8081
+      # host_port:container_port
+    ports : 
+      - 8083:8080
+
+    depends_on :   
+      db-5:
+        condition : service_healthy
+
+      db-6: 
+        condition : service_healthy
+
+  db-5 : 
+    build : .
+    image : rust_auth_build_with_health_check_curl_added
+    environment : 
+      - ver=app_3
+    ports : 
+      - 8084:8080
+
+    depends_on :   
       db-1:
+        condition : service_healthy
+
+    
+  db-6 : 
+    build : .
+    image : rust_auth_build_with_health_check_curl_added
+    environment : 
+      - ver=app_3
+    ports : 
+      - 8085:8080
+
+    depends_on :   
+      db-2:
         condition : service_healthy
     
     # env_file : "dev.env"

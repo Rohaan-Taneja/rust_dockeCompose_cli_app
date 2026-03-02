@@ -53,7 +53,7 @@ impl fmt::Display for CliCommands {
 pub async fn validate_command(
     cli_name: String,
     cli_command: String,
-    file_path: String,
+    file_path: String, //docker compose file path
 ) -> Result<bool, CliErrors> {
     if cli_name != CliName::DockYard.to_string() {
         return Err(CliErrors::wrong_cli_name());
@@ -69,7 +69,7 @@ pub async fn validate_command(
         CliCommands::Up => {
 
             
-            let ans = yaml_parser(&file_path).await;
+            let ans = yaml_parser(&file_path).await.map_err(|e| e)?;
           
             println!("this is the up command proces , we will parse the docker compose file , start the ")
         }
