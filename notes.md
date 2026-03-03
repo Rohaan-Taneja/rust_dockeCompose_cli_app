@@ -77,9 +77,18 @@ created flow and check_reorder function
 
 
 ## 📅 1st March 2026
-parse compose struct to our way , vec or services in depeds_on order and map of (service_name , service_details )
+parse compose struct to our way , vec or services in depeds_on order and map of (service_name , service_details ) ✅ ✅ 
+
+
+## 📅 2nd March 2026
+resolved the current approach , debug it and it si genrating correct order✅
+but this approach will not handle edge cases and will stuck in circular dependecies  ❗❓
+
+so we are trying to learn and implement the new approach 
 create depedecy graph 
-and see and write flow ho we gonna loop and strat containers in order 
+
+
+
 
 
 add service to service map is done , check flow and call and connect to it 

@@ -49,9 +49,6 @@ services:
         condition : service_healthy
 
     
-    
-
-    
   db-4 : 
     # build : .
     image : rust_auth_build_with_health_check_curl_added
