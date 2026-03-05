@@ -1,5 +1,5 @@
 use bollard::models::{EndpointSettings, NetworkingConfig};
-use bollard::secret::NetworkCreateRequest;
+use bollard::secret::{HealthConfig, NetworkCreateRequest};
 use bollard::{
     Docker,
     query_parameters::{
@@ -10,8 +10,11 @@ use bollard::{
 };
 
 use bytes::Bytes;
+use docker_compose_types::{Healthcheck, HealthcheckTest};
 use http_body_util::StreamBody;
+use humantime::parse_duration;
 use hyper::body::Frame;
+use std::sync::Arc;
 use std::{
     collections::HashMap,
     pin::Pin,
@@ -35,8 +38,8 @@ pub async fn build_current_folder_image(
     inspect_type: &ContainerInspectType,
     host_port: Option<String>,
     cont_port: Option<String>,
-    this_project_labels : &mut HashMap<String, String>,
-    this_project_network : &NetworkingConfig
+    this_project_labels: &mut HashMap<String, String>,
+    this_project_network: &NetworkingConfig,
 ) -> Result<bool, CliErrors> {
     // we can change it according input provided
     let to_be_built_image_tag = image_tag;
@@ -79,11 +82,10 @@ pub async fn build_current_folder_image(
         inspect_type,
         host_port.to_owned(),
         cont_port.to_owned(),
-         &this_project_network ,
-        this_project_labels
+        &this_project_network,
+        this_project_labels,
     )
     .await?;
-
 
     Ok(true)
 }
@@ -183,8 +185,8 @@ pub async fn start_image_in_container(
     inspect_type: &ContainerInspectType,
     host_port: Option<String>,
     cont_port: Option<String>,
-    network_config : &NetworkingConfig,
-    labels : &mut HashMap<String, String>
+    network_config: &NetworkingConfig,
+    labels: &mut HashMap<String, String>,
 ) -> Result<bool, CliErrors> {
     println!(" I am starting the container");
 
@@ -217,6 +219,19 @@ pub async fn start_image_in_container(
 
     println!(" connected with default");
 
+    // if health check(healthy) is given the we will give data else none is given
+    let health_config: Option<HealthConfig> = match inspect_type {
+        ContainerInspectType::Status => None,
+        ContainerInspectType::Health(health_inspect_data) => {
+
+            // Some(health_inspect_data.clone())
+            // put data in correct format
+            let health_config_struct = get_health_config(health_inspect_data.clone())?;
+
+            Some(health_config_struct)
+
+        }
+    };
 
     labels.insert("com.docker.compose.service".to_string(), image_tag.clone());
 
@@ -230,6 +245,7 @@ pub async fn start_image_in_container(
                 host_config: host_config,
                 labels: Some(labels.clone()),
                 networking_config: Some(network_config.clone()),
+                healthcheck : health_config,
                 ..Default::default()
             },
         )
@@ -257,9 +273,7 @@ pub async fn start_image_in_container(
 
     println!("container started");
 
-    // wait_until_conatiner_running(&docker, &container_id, inspect_type)
-    //     .await
-    //     .map_err(|e| e)?;
+    wait_until_conatiner_running(&docker, &container_id, inspect_type).await?;
 
     Ok(true)
 }
@@ -274,15 +288,32 @@ pub async fn wait_until_conatiner_running(
     inspect_type: &ContainerInspectType,
 ) -> Result<bool, CliErrors> {
     loop {
-        let res = conatiner_status(&docker, &container_id, &inspect_type)
+        // running/healthy
+        let res = container_status(&docker, &container_id, &inspect_type)
             .await
             .map_err(|e| e)?;
 
         println!("this is the res for container status {res}");
 
-        if res == "healthy" {
-            break;
+        // for status , if status is running break and go
+        // health , if status is healthy , break and go
+        match inspect_type {
+            ContainerInspectType::Status => {
+                // if polling for status , status should be runnning , if not , wait
+
+                if res == "running".to_owned() {
+                    break;
+                }
+            }
+            // if polling for healthy service , health should be healthy , if not , wait
+            ContainerInspectType::Health(_) => {
+                if res == "healthy".to_owned() {
+                    break;
+                }
+            }
         }
+
+        // if none is matched , then we will sleep fo 2 sec and poll again for status/health
         let current_time = time::Instant::now();
         sleep(Duration::new(2, 0));
 
@@ -297,12 +328,14 @@ pub async fn wait_until_conatiner_running(
 /**
  * this function will poll the container and check its status/health(service running or not)
  */
-pub async fn conatiner_status(
+pub async fn container_status(
     docker: &Docker,
     container_id: &str,
     inspect_type: &ContainerInspectType,
 ) -> Result<String, CliErrors> {
     println!("I am here");
+
+    // polling and getting conatiner status
     let container_inspect_response = docker
         .inspect_container(
             container_id,
@@ -318,7 +351,7 @@ pub async fn conatiner_status(
             CliErrors::new(e.to_string())
         })?
         .state
-        .ok_or_else(|| CliErrors::new("getting none while ispecting the conatiner".to_string()))?;
+        .ok_or_else(|| CliErrors::new("getting none while inspecting the conatiner".to_string()))?;
 
     println!(
         "I am after conatiner inspect res {:?}",
@@ -337,11 +370,17 @@ pub async fn conatiner_status(
                 })?
                 .to_string();
 
-            println!("this is the container ispect state {}", ans_status);
+            if ans_status == "running".to_string() {
+                println!("STATUS == RUNNING");
+            }
+            println!(
+                "this is the container ispect state in status check {}",
+                ans_status
+            );
 
-            return Ok(String::from("value"));
+            Ok(ans_status)
         }
-        ContainerInspectType::Health => {
+        ContainerInspectType::Health(polling_details) => {
             println!("i am in health check");
             let ans_health = container_inspect_response
                 .health
@@ -352,9 +391,82 @@ pub async fn conatiner_status(
                 })?
                 .to_string();
 
-            println!("this is the container ispect state {:?}", ans_health);
+            println!(
+                "this is the container ispect state in health check {:?}",
+                ans_health
+            );
 
             return Ok(ans_health);
         }
     }
+}
+
+
+/**
+ * this function will take healthcheck struct ans input and return healthconfig struct as output
+ */
+pub fn get_health_config(health_check: Healthcheck) -> Result<HealthConfig, CliErrors> {
+    // test command in vec format
+    let test = match health_check.test {
+        Some(HealthcheckTest::Single(s)) => Some(vec![s]),
+        Some(HealthcheckTest::Multiple(vec_tests)) => Some(vec_tests),
+        None => None,
+    };
+
+    let interval = match health_check.interval {
+        Some(i) => {
+            Some(duration_to_nanos(&i)?)
+            // let timeout = duration_to_nanos("5s")?;
+            // let start_period = duration_to_nanos("10s")?;
+        }
+        None => None,
+    };
+
+    let timeout = match health_check.timeout {
+        Some(ref t) =>{
+            Some(duration_to_nanos(&t)?)
+
+        },
+        None =>{
+            None
+        }
+    };
+
+    let start_interval = match health_check.start_interval {
+        Some(si) =>{
+            Some(duration_to_nanos(&si)?)
+
+        },
+        None =>{
+            None
+        }
+    };
+
+    let start_period =  match health_check.start_period {
+        Some(ref sp) =>{
+            Some(duration_to_nanos(&sp)?)
+
+        },
+        None =>{
+            None
+        }
+    };
+
+    let retries = Some(health_check.retries); 
+
+    Ok(HealthConfig {
+        test: test,
+        interval: interval,
+        timeout: timeout,
+        retries: retries,
+        start_period: start_period,
+        start_interval: start_interval,
+    })
+}
+
+// function to convert time to nanno seconds
+pub fn duration_to_nanos(input: &str) -> Result<i64, CliErrors> {
+    let duration: Duration =
+        parse_duration(input).map_err(|e| CliErrors::new(format!("{}", e.to_string())))?;
+    Ok(duration.as_nanos() as i64)
 }

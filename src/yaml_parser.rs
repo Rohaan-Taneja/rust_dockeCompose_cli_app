@@ -1,33 +1,15 @@
 use bollard::{
     Docker,
-    query_parameters::{
-        CreateContainerOptions, CreateImageOptions, InspectContainerOptionsBuilder,
-        ListImagesOptions, ListImagesOptionsBuilder,
-    },
-    secret::{
-        Config, ContainerCreateBody, EndpointSettings, HostConfig, NetworkCreateRequest,
-        NetworkingConfig, PortBinding,
-    },
+    secret::{EndpointSettings, NetworkCreateRequest, NetworkingConfig},
 };
-use bytes::Bytes;
-use http_body_util::{Full, StreamBody};
-use hyper::body::Frame;
+
 use std::{
     collections::HashMap,
     fs::{self},
-    io::{self, Error},
     path::Path,
-    pin::Pin,
-    process::Stdio,
-    thread::sleep,
-    time::{self, Duration},
-    vec,
 };
-use tokio::{process::Command, task};
-use tokio_util::io::ReaderStream;
-// use bollard::image::ListImagesOptions;
-use docker_compose_types::Compose;
-use tar::Builder;
+
+use docker_compose_types::{Compose, Healthcheck};
 
 use crate::{
     cli_errors::CliErrors,
@@ -38,11 +20,6 @@ use crate::{
             start_image_in_container,
         },
     },
-};
-
-use futures_util::{
-    Stream, StreamExt, TryFutureExt,
-    stream::{self},
 };
 
 pub const FILE_NAMES: [&str; 6] = [
@@ -61,7 +38,7 @@ pub const FILE_NAMES: [&str; 6] = [
  */
 pub enum ContainerInspectType {
     Status,
-    Health,
+    Health(Healthcheck),
 }
 
 /**
@@ -78,12 +55,10 @@ pub async fn yaml_parser(file_path: impl Into<String>) -> Result<(), CliErrors> 
     let (mut this_project_labels, this_project_network) =
         create_network(&docker, String::from("this_project_network_2")).await?;
 
-   
     let this_compose_label = this_project_labels
         .get("com.docker.compose.project")
         .ok_or_else(|| CliErrors::new(String::from("getting erro while fetching the label ")))?;
 
-    
     let (service_map, service_vec) =
         validate_file_path(&file_pathh, this_compose_label.to_owned()).map_err(|e| e)?;
 
@@ -92,7 +67,6 @@ pub async fn yaml_parser(file_path: impl Into<String>) -> Result<(), CliErrors> 
     // loop over service , and start the images in conatiner 1 by 1
     // if build = . , build current folder , if image name , then pull/build image accordingly
     for ser in service_vec {
-        
         let current_image_details = service_map
             .get(&ser)
             .ok_or_else(|| CliErrors::new(format!("getting some erro whil extracting {ser}")))?;
@@ -153,10 +127,20 @@ pub async fn yaml_parser(file_path: impl Into<String>) -> Result<(), CliErrors> 
                     pull_image_locally(&docker, image_name.to_owned()).await?;
                 }
 
+                let health_check_enum = match current_image_details.health_check.clone() {
+                    Some(health_polling_details) =>{
+                        ContainerInspectType::Health(health_polling_details)
+                    },
+                    None =>{
+                        ContainerInspectType::Status
+                    }
+                    
+                }; 
+
                 start_image_in_container(
                     &docker,
                     image_name.to_owned(),
-                    &inspect_type,
+                    &health_check_enum,
                     h_p.to_owned(),
                     c_p.to_owned(),
                     &this_project_network,
@@ -215,6 +199,9 @@ pub fn validate_file_path(
 
     let compose_content = serde_yaml::from_str::<Compose>(&file_content)
         .map_err(|e| CliErrors::new(e.to_string()))?;
+
+
+    println!("this is the compose content {:?} " , compose_content);
 
     let services = &compose_content.services;
 

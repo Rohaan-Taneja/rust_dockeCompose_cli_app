@@ -103,9 +103,7 @@ if we are giving conatiner name , then why it is not showing up in the ui , cona
 correct the for loop , wait for the service to start then start the next service ❓❓
 
 
-complete start fo all the service with proper wait today
-tomorrow we will do stop , status and other
-
+complete start fo all the service with proper wait today ✅
 
 see how to start all services in 1 conatiner - ✅
     connect to same network✅
@@ -117,9 +115,17 @@ running local image ✅
 port binding corrected  ✅
 
 
-health check not added , it is hardcoded , do it 
-port is propvided , (but add error handling , see what if same port is given )
-env not added
+tomorrow we will do stop , status and other
+
+
+
+
+
+
+
+analyze thw wait function , somethings is wrong , if status is end , then we will send running what is happening after that 
+
+heatthy is for health na , why for status also ??
 
 
 
@@ -127,7 +133,7 @@ this_project_network ❓❓
 <!-- network name is hardcoded , make it dynamic -->
 
 
-parallel wala thing we will see ❓❓
+1) parallel wala thing we will see ❓❓
 
 2) then see how to build when git repo is provided ❓
 
@@ -138,8 +144,10 @@ parallel wala thing we will see ❓❓
 
 6) network dynamic or hardcoded ❓
 
-7) waiting for a service to start , then next service is starting , status and healthcheck ?
+7) waiting for a service to start , then next service is starting , status and healthcheck ❓
 
+8) health check not added , it is hardcoded , do it ❓
+port is propvided , (but add error handling , see what if same port is given )❓
 
 
 
@@ -148,16 +156,8 @@ parallel wala thing we will see ❓❓
 
 
 currently we are only supporting current folder build = . and not folder path
-for image , we are supporting local image build and pull from docker and the build 
+for image , we are supporting local image build and pull from docker and the build ❓
 
 
-
-
-now see whcih function call will-
-
-1.  start the container from image provided
-2.  start the container from build dockerfile 
-3.  then see depedency graph se
-4.  then see parallel starting of containers
 
 for other we wil take contianer file 3) logs , status , stop , input will be container_id
