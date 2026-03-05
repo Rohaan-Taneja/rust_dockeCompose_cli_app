@@ -99,23 +99,22 @@ did not do anything
 
 
 ## 📅 5th March 2026
-correct the for loop , wait for the service to start then start the next service
-see how to start all services in 1 conatiner 
+if we are giving conatiner name , then why it is not showing up in the ui , conatiner name should be visible , it is showing up
+correct the for loop , wait for the service to start then start the next service ❓❓
+
+
+complete start fo all the service with proper wait today
+tomorrow we will do stop , status and other
+
+
+see how to start all services in 1 conatiner - ✅
+    connect to same network✅
+    add labels , then docker may group them together✅
 
 current_folder running ✅
 fetching image from docker hub and running ✅ 
 running local image ✅
 port binding corrected  ✅
-
-
-not all containers need ports , if ports are given we will deploy and connect to those prts , else not
-ports are needed for servers who want to listen to some ports 
-
-not all apps needs ports , they can just do their task , complete it and exit(no ports required)
-
-
-current docker file is not building see the error in logs , correct it 
-then try it with our cli
 
 
 health check not added , it is hardcoded , do it 
@@ -124,19 +123,22 @@ env not added
 
 
 
+this_project_network ❓❓
+<!-- network name is hardcoded , make it dynamic -->
 
 
 parallel wala thing we will see ❓❓
-
-
-
-
-
 
 2) then see how to build when git repo is provided ❓
 
 
 4) how all. containers are present in 1 container only ❓
+
+5) env given ❓
+
+6) network dynamic or hardcoded ❓
+
+7) waiting for a service to start , then next service is starting , status and healthcheck ?
 
 
 

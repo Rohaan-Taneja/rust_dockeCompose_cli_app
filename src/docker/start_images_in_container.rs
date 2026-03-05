@@ -1,3 +1,5 @@
+use bollard::models::{EndpointSettings, NetworkingConfig};
+use bollard::secret::NetworkCreateRequest;
 use bollard::{
     Docker,
     query_parameters::{
@@ -6,6 +8,7 @@ use bollard::{
     },
     secret::{ContainerCreateBody, HostConfig, PortBinding},
 };
+
 use bytes::Bytes;
 use http_body_util::StreamBody;
 use hyper::body::Frame;
@@ -32,6 +35,8 @@ pub async fn build_current_folder_image(
     inspect_type: &ContainerInspectType,
     host_port: Option<String>,
     cont_port: Option<String>,
+    this_project_labels : &mut HashMap<String, String>,
+    this_project_network : &NetworkingConfig
 ) -> Result<bool, CliErrors> {
     // we can change it according input provided
     let to_be_built_image_tag = image_tag;
@@ -74,8 +79,11 @@ pub async fn build_current_folder_image(
         inspect_type,
         host_port.to_owned(),
         cont_port.to_owned(),
+         &this_project_network ,
+        this_project_labels
     )
     .await?;
+
 
     Ok(true)
 }
@@ -175,6 +183,8 @@ pub async fn start_image_in_container(
     inspect_type: &ContainerInspectType,
     host_port: Option<String>,
     cont_port: Option<String>,
+    network_config : &NetworkingConfig,
+    labels : &mut HashMap<String, String>
 ) -> Result<bool, CliErrors> {
     println!(" I am starting the container");
 
@@ -207,7 +217,8 @@ pub async fn start_image_in_container(
 
     println!(" connected with default");
 
-    // let image_name = String::from("our_currnt_p")
+
+    labels.insert("com.docker.compose.service".to_string(), image_tag.clone());
 
     // Create container and docker port binding with local computer ip and port
     let container_id = docker
@@ -217,6 +228,8 @@ pub async fn start_image_in_container(
                 image: Some(image_tag.to_string()),
                 exposed_ports: exposed_ports, // conatiner port
                 host_config: host_config,
+                labels: Some(labels.clone()),
+                networking_config: Some(network_config.clone()),
                 ..Default::default()
             },
         )

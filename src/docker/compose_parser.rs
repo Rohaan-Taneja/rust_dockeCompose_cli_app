@@ -81,29 +81,31 @@ pub fn add_service_to_service_map(
         None => None,
     };
 
-    let image_name = compose_service_data.image;
+    let mut image_name = compose_service_data.image;
 
     let mut container_name = compose_service_data.container_name;
 
+    // we are extracting folder name of this project
+    let file_path =
+        env::current_dir().map_err(|e| CliErrors::new(format!("{}", { e.to_string() })))?;
+
+    // geting file name from path
+    let file_name = file_path
+        .file_name()
+        .ok_or(CliErrors::file_name_extraction_fail())?;
+    let file_name = file_name
+        .to_str()
+        .ok_or(CliErrors::file_name_extraction_fail())?;
+
+    // projectName_service_name
+    if image_name.is_none() {
+        image_name = Some(format!("{}_{}", file_name, service_name));
+    }
+    println!("this is the container name {:?}", &container_name);
+
     // if conatiner name is not specifed , and image and build is bot specified , hen image name is the container name
     if container_name.is_none() {
-        if image_name.is_some() && build_folder.is_some() {
-            container_name = image_name.clone();
-        } else {
-            // string to file path
-            let file_path =
-                env::current_dir().map_err(|e| CliErrors::new(format!("{}", { e.to_string() })))?;
-
-            // geting file name from path
-            let file_name = file_path
-                .file_name()
-                .ok_or(CliErrors::file_name_extraction_fail())?;
-            let file_name = file_name
-                .to_str()
-                .ok_or(CliErrors::file_name_extraction_fail())?;
-            container_name = Some(String::from(file_name));
-            println!("this is the container name {:?}" , file_name);
-        }
+        container_name = Some(format!("{}_{}_1", file_name, service_name));
     }
 
     let healthcheck_data = compose_service_data.healthcheck;
@@ -169,6 +171,11 @@ pub fn add_service_to_service_map(
         port: ports_tuple,
         environment_vars: enviroment_vars_hash,
     };
+
+    println!(
+        "this is the details of srvice {} = {:?}",
+        service_name, data_struct
+    );
 
     // added service details to the struct
     service_map.insert(service_name.to_string(), data_struct);

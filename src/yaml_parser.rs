@@ -4,7 +4,10 @@ use bollard::{
         CreateContainerOptions, CreateImageOptions, InspectContainerOptionsBuilder,
         ListImagesOptions, ListImagesOptionsBuilder,
     },
-    secret::{Config, ContainerCreateBody, HostConfig, PortBinding},
+    secret::{
+        Config, ContainerCreateBody, EndpointSettings, HostConfig, NetworkCreateRequest,
+        NetworkingConfig, PortBinding,
+    },
 };
 use bytes::Bytes;
 use http_body_util::{Full, StreamBody};
@@ -72,15 +75,24 @@ pub async fn yaml_parser(file_path: impl Into<String>) -> Result<(), CliErrors> 
     let docker =
         Docker::connect_with_local_defaults().map_err(|e| CliErrors::new(e.to_string()))?;
 
-    // we will validate dockercompose file pat and
-    // it will return service details in map and service vec , in correct dependecy format
-    let (service_map, service_vec) = validate_file_path(&file_pathh).map_err(|e| e)?;
+    let (mut this_project_labels, this_project_network) =
+        create_network(&docker, String::from("this_project_network_2")).await?;
+
+   
+    let this_compose_label = this_project_labels
+        .get("com.docker.compose.project")
+        .ok_or_else(|| CliErrors::new(String::from("getting erro while fetching the label ")))?;
+
+    
+    let (service_map, service_vec) =
+        validate_file_path(&file_pathh, this_compose_label.to_owned()).map_err(|e| e)?;
 
     let inspect_type = ContainerInspectType::Status;
 
     // loop over service , and start the images in conatiner 1 by 1
     // if build = . , build current folder , if image name , then pull/build image accordingly
     for ser in service_vec {
+        
         let current_image_details = service_map
             .get(&ser)
             .ok_or_else(|| CliErrors::new(format!("getting some erro whil extracting {ser}")))?;
@@ -116,6 +128,8 @@ pub async fn yaml_parser(file_path: impl Into<String>) -> Result<(), CliErrors> 
                         &inspect_type,
                         h_p.to_owned(),
                         c_p.to_owned(),
+                        &mut this_project_labels,
+                        &this_project_network,
                     )
                     .await?;
                 } else {
@@ -134,7 +148,7 @@ pub async fn yaml_parser(file_path: impl Into<String>) -> Result<(), CliErrors> 
                 let check_local_image = check_image_locally(&docker, &image_name).await?;
                 println!("this i the locall image ans {check_local_image}");
 
-                // if not present locally, it must be present in at docker hub , we will check there 
+                // if not present locally, it must be present in at docker hub , we will check there
                 if !check_local_image {
                     pull_image_locally(&docker, image_name.to_owned()).await?;
                 }
@@ -145,10 +159,14 @@ pub async fn yaml_parser(file_path: impl Into<String>) -> Result<(), CliErrors> 
                     &inspect_type,
                     h_p.to_owned(),
                     c_p.to_owned(),
+                    &this_project_network,
+                    &mut this_project_labels,
                 )
                 .await?;
             }
         }
+
+        println!("this is the current runned service {}", ser);
     }
 
     Ok(())
@@ -160,6 +178,7 @@ pub async fn yaml_parser(file_path: impl Into<String>) -> Result<(), CliErrors> 
  */
 pub fn validate_file_path(
     i_file_path: &str,
+    label: String,
 ) -> Result<
     (
         HashMap<String, compose_parser::DockerImageDetails>,
@@ -204,5 +223,43 @@ pub fn validate_file_path(
     // vec and hashmap of sorted serivces
     let ans = construct_docker_image_details_map(&services.0).map_err(|e| e)?;
 
+    println!("these are the services {ans:?}");
+
     Ok((ans.0, ans.1))
+}
+
+/**
+ * **this function returning labels and newly created network
+ * we need this labels to give a tag.label to each conatiner , so that docker can group the conatiners on the basis of this lables
+ * we need this network , so docker can put these conatiner in this specified network
+ */
+pub async fn create_network(
+    docker: &Docker,
+    network_name: String,
+) -> Result<(HashMap<String, String>, NetworkingConfig), CliErrors> {
+    let config = NetworkCreateRequest {
+        name: String::from(network_name.to_owned()),
+        ..Default::default()
+    };
+    docker
+        .create_network(config)
+        .await
+        .map_err(|e| CliErrors::new(String::from(format!("{}", { e.to_string() }))))?;
+
+    let mut labels: HashMap<String, String> = HashMap::new();
+
+    labels.insert(
+        "com.docker.compose.project".to_string(),
+        network_name.to_owned(),
+    );
+
+    let mut endpoints = HashMap::new();
+
+    endpoints.insert(network_name.to_owned(), EndpointSettings::default());
+
+    let networking_config = NetworkingConfig {
+        endpoints_config: Some(endpoints),
+    };
+
+    Ok((labels, networking_config))
 }
