@@ -1,6 +1,10 @@
 use docker_compose_types::{BuildStep, DependsOnOptions, Environment, Healthcheck, Ports, Service};
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    env,
+    path::Path,
+};
 
 use crate::{cli_errors::CliErrors, docker::service_sort::sort_services};
 use indexmap::IndexMap;
@@ -12,7 +16,8 @@ pub struct DockerImageDetails {
     pub container_name: Option<String>,
     pub health_check: Option<Healthcheck>,
     // for now supporting 1 port only (host_port , conatiner_exposed_port) , likning 1 service in container to 1 port outside the container
-    pub port: (String, String),
+    //    we may get 1 port(host:con) or no port(for cli type apps , start->run-> end ->conatiner stops)
+    pub port: Option<(String, String)>,
     pub environment_vars: Option<HashMap<String, String>>, // env_1 : env_1_value
 }
 
@@ -30,7 +35,6 @@ pub fn construct_docker_image_details_map(
     // this is the vec conatineing service in correct order (according to dependency graph)
     let mut service_vec = Vec::<String>::new();
 
-
     // we will store all the nodes , which we already visited, we will store in it
     let mut visited_ser = HashSet::<String>::new();
 
@@ -38,7 +42,6 @@ pub fn construct_docker_image_details_map(
     let mut visiting_ser = HashSet::<String>::new();
 
     for value in services_index_map.keys() {
-
         // sorting the service is correct dependecy order
         sort_services(
             &mut visiting_ser,
@@ -53,8 +56,6 @@ pub fn construct_docker_image_details_map(
 
     Ok((service_map, service_vec))
 }
-
-
 
 /**
  * we will add this service to our serive_map in corrent format
@@ -77,10 +78,7 @@ pub fn add_service_to_service_map(
         Some(BuildStep::Advanced(_)) => {
             return Err(CliErrors::not_supported_build_type(&service_name));
         }
-        None => {
-            println!("build file name of this service {service_name} is null");
-            None
-        }
+        None => None,
     };
 
     let image_name = compose_service_data.image;
@@ -91,32 +89,50 @@ pub fn add_service_to_service_map(
     if container_name.is_none() {
         if image_name.is_some() && build_folder.is_some() {
             container_name = image_name.clone();
+        } else {
+            // string to file path
+            let file_path =
+                env::current_dir().map_err(|e| CliErrors::new(format!("{}", { e.to_string() })))?;
+
+            // geting file name from path
+            let file_name = file_path
+                .file_name()
+                .ok_or(CliErrors::file_name_extraction_fail())?;
+            let file_name = file_name
+                .to_str()
+                .ok_or(CliErrors::file_name_extraction_fail())?;
+            container_name = Some(String::from(file_name));
+            println!("this is the container name {:?}" , file_name);
         }
     }
 
     let healthcheck_data = compose_service_data.healthcheck;
 
     // extracting ports from the service data
+    // Option ((ports tuple)/None(no ports))
     let ports_tuple = match compose_service_data.ports {
         Ports::Short(ports) => {
             if ports.len() > 1 {
                 return Err(CliErrors::not_supported_ports_format(&service_name));
-            }
-            let (h_port, cont_port) = ports
-                .first()
-                .ok_or_else(|| {
-                    CliErrors::new(String::from(
-                        "please add ports where you want to start service in the container",
-                    ))
-                })?
-                .split_once(":")
-                .ok_or_else(|| {
-                    CliErrors::new(String::from(
-                        "getting error extracting ports of the service",
-                    ))
-                })?;
+            } else if ports.len() == 1 {
+                let (h_port, cont_port) = ports
+                    .first()
+                    .ok_or_else(|| {
+                        CliErrors::new(String::from(
+                            "please add ports where you want to start service in the container",
+                        ))
+                    })?
+                    .split_once(":")
+                    .ok_or_else(|| {
+                        CliErrors::new(String::from(
+                            "getting error extracting ports of the service",
+                        ))
+                    })?;
 
-            (h_port.to_string(), cont_port.to_string())
+                Some((h_port.to_string(), cont_port.to_string()))
+            } else {
+                None
+            }
         }
         Ports::Long(_) => {
             return Err(CliErrors::not_supported_ports_format(&service_name));

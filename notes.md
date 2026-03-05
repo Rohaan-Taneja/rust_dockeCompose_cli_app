@@ -82,40 +82,49 @@ parse compose struct to our way , vec or services in depeds_on order and map of 
 
 ## 📅 2nd March 2026
 resolved the current approach , debug it and it si genrating correct order✅
-but this approach will not handle edge cases and will stuck in circular dependecies  ❗❓
+but this approach will not handle edge cases and will stuck in circular dependecies (updated the approach on 3rd march)✅ ✅ 
 
 so we are trying to learn and implement the new approach 
 create depedecy graph 
 
+## 📅 3rd March 2026
+created topology sort for string the services in corrent order and finding the cyclic dependency
+creating a for loop to start all services on different ports (no waitng for service to start , no env , just images starting in conatiner)✅
+
+
+
+## 📅 4th March 2026
+thoda sa dekha 
+did not do anything
+
+
+## 📅 5th March 2026
+correct the for loop , wait for the service to start then start the next service
+see how to start all services in 1 conatiner 
+
+current_folder running ✅
+fetching image from docker hub and running ✅ 
+running local image ✅
+port binding corrected  ✅
+
+
+not all containers need ports , if ports are given we will deploy and connect to those prts , else not
+ports are needed for servers who want to listen to some ports 
+
+not all apps needs ports , they can just do their task , complete it and exit(no ports required)
+
+
+current docker file is not building see the error in logs , correct it 
+then try it with our cli
+
+
+health check not added , it is hardcoded , do it 
+port is propvided , (but add error handling , see what if same port is given )
+env not added
 
 
 
 
-add service to service map is done , check flow and call and connect to it 
-
-
-
-depends_on => DependsOnOptions enum(vec , indexmap , hashmap) => serivce_name /service_name : condition
-
-Depends on
-    - none
-    - indexMap =>
-        (service_name , 
-            DependsCondition { 
-                condition: "service_healthy", 
-                restart: None,
-                required: None
-            }
-        ) 
-
-   
-        we will travel on the services table , 
-        - if depends on is null , the we will add this serivce to vec_services and hashmap
-        - if depends on is a vec , so we will traverse this vec and check , if that service is already present in our vec_services , then we will not add else add that depeds service and then this current service 
-        - if depends ins a indexmap or map => we will traverse on them ( for (key , value) of indexmap) and we ill check if service is already present in vec_services then we will skip , else we will add that services and then in last add this current service 
-
-but if we see with dependcy persepctive , we need to start a container completely , then only start the next container❓❓
-we will map loop over service and build/run containers 1 by 1 ❓❓
 
 parallel wala thing we will see ❓❓
 
@@ -126,7 +135,6 @@ parallel wala thing we will see ❓❓
 
 2) then see how to build when git repo is provided ❓
 
-3) then see how to parse the service in correct order so then loop to the array and start the containers in order , see parallel starteing of containers ❓❓
 
 4) how all. containers are present in 1 container only ❓
 
@@ -136,6 +144,9 @@ parallel wala thing we will see ❓❓
 
 
 
+
+currently we are only supporting current folder build = . and not folder path
+for image , we are supporting local image build and pull from docker and the build 
 
 
 
