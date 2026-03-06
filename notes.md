@@ -103,29 +103,24 @@ if we are giving conatiner name , then why it is not showing up in the ui , cona
 correct the for loop , wait for the service to start then start the next service ❓❓
 
 
-complete start fo all the service with proper wait today ✅
+
 
 see how to start all services in 1 conatiner - ✅
     connect to same network✅
-    add labels , then docker may group them together✅
-
+    add labels , then docker group them together✅
 current_folder running ✅
 fetching image from docker hub and running ✅ 
 running local image ✅
 port binding corrected  ✅
 
 
-tomorrow we will do stop , status and other
+## 📅 6th March 2026
+conatiner starting properly in porper order , waitng for the current once to start then next is starting  ✅
 
 
+ we will do stop , status and other
 
 
-
-
-
-analyze thw wait function , somethings is wrong , if status is end , then we will send running what is happening after that 
-
-heatthy is for health na , why for status also ??
 
 
 

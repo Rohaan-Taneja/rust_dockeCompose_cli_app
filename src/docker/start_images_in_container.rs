@@ -223,13 +223,11 @@ pub async fn start_image_in_container(
     let health_config: Option<HealthConfig> = match inspect_type {
         ContainerInspectType::Status => None,
         ContainerInspectType::Health(health_inspect_data) => {
-
             // Some(health_inspect_data.clone())
             // put data in correct format
             let health_config_struct = get_health_config(health_inspect_data.clone())?;
 
             Some(health_config_struct)
-
         }
     };
 
@@ -245,7 +243,7 @@ pub async fn start_image_in_container(
                 host_config: host_config,
                 labels: Some(labels.clone()),
                 networking_config: Some(network_config.clone()),
-                healthcheck : health_config,
+                healthcheck: health_config,
                 ..Default::default()
             },
         )
@@ -401,7 +399,6 @@ pub async fn container_status(
     }
 }
 
-
 /**
  * this function will take healthcheck struct ans input and return healthconfig struct as output
  */
@@ -423,36 +420,21 @@ pub fn get_health_config(health_check: Healthcheck) -> Result<HealthConfig, CliE
     };
 
     let timeout = match health_check.timeout {
-        Some(ref t) =>{
-            Some(duration_to_nanos(&t)?)
-
-        },
-        None =>{
-            None
-        }
+        Some(ref t) => Some(duration_to_nanos(&t)?),
+        None => None,
     };
 
     let start_interval = match health_check.start_interval {
-        Some(si) =>{
-            Some(duration_to_nanos(&si)?)
-
-        },
-        None =>{
-            None
-        }
+        Some(si) => Some(duration_to_nanos(&si)?),
+        None => None,
     };
 
-    let start_period =  match health_check.start_period {
-        Some(ref sp) =>{
-            Some(duration_to_nanos(&sp)?)
-
-        },
-        None =>{
-            None
-        }
+    let start_period = match health_check.start_period {
+        Some(ref sp) => Some(duration_to_nanos(&sp)?),
+        None => None,
     };
 
-    let retries = Some(health_check.retries); 
+    let retries = Some(health_check.retries);
 
     Ok(HealthConfig {
         test: test,
