@@ -1,3 +1,4 @@
+#![allow(dead_code, unused_imports)]
 pub mod cli_errors;
 use clap::Parser;
 
@@ -7,22 +8,26 @@ pub mod docker;
 
 pub mod yaml_parser;
 
+
+/**
+ * argument can a file_path/network_name
+ */
 #[derive(Parser , Debug)]
 pub struct CLI {
     cli_name : String ,
     cli_command : String ,
-    file_path : String
+    argument : String
 
 
 }
 
 #[tokio::main]
-async fn main() -> Result<() , CliErrors> {
+async fn main() -> Result<(), CliErrors> {
     println!("Hello, world!");
 
     let cli = CLI::parse();
 
-    validate_command(cli.cli_name, cli.cli_command, cli.file_path).await.map_err(|e| e)?;
+    validate_command(cli.cli_name, cli.cli_command, cli.argument).await.map_err(|e| e)?;
 
     Ok(())
 

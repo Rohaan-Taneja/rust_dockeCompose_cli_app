@@ -5,8 +5,9 @@ use bollard::{
 
 use std::{
     collections::HashMap,
+    env,
     fs::{self},
-    path::Path,
+    path::{Path, PathBuf},
 };
 
 use docker_compose_types::{Compose, Healthcheck};
@@ -31,6 +32,11 @@ pub const FILE_NAMES: [&str; 6] = [
     "docker-compose.override.yml",
 ];
 
+pub enum FilePathType {
+    CurrentDir,
+    FilePath,
+}
+
 /**
  * this will tell what do we have to inspect
  * status =>just to check if the conatiner is running or not
@@ -52,8 +58,11 @@ pub async fn yaml_parser(file_path: impl Into<String>) -> Result<(), CliErrors> 
     let docker =
         Docker::connect_with_local_defaults().map_err(|e| CliErrors::new(e.to_string()))?;
 
+    // project network and labels(so as to add all containers under 1 folder in docker ui , like docker compose do)
+    let current_dir_name = file_name("", FilePathType::CurrentDir)?;
+    println!("this is the current dir name {}", &current_dir_name);
     let (mut this_project_labels, this_project_network) =
-        create_network(&docker, String::from("this_project_network_2")).await?;
+        create_network(&docker, current_dir_name).await?;
 
     let this_compose_label = this_project_labels
         .get("com.docker.compose.project")
@@ -61,8 +70,6 @@ pub async fn yaml_parser(file_path: impl Into<String>) -> Result<(), CliErrors> 
 
     let (service_map, service_vec) =
         validate_file_path(&file_pathh, this_compose_label.to_owned()).map_err(|e| e)?;
-
-    let inspect_type = ContainerInspectType::Status;
 
     // loop over service , and start the images in conatiner 1 by 1
     // if build = . , build current folder , if image name , then pull/build image accordingly
@@ -81,7 +88,6 @@ pub async fn yaml_parser(file_path: impl Into<String>) -> Result<(), CliErrors> 
         // ports from the service
         let mut h_p = None;
         let mut c_p = None;
-
         match current_image_details.port.clone() {
             Some(prts) => {
                 h_p = Some(prts.0);
@@ -91,6 +97,12 @@ pub async fn yaml_parser(file_path: impl Into<String>) -> Result<(), CliErrors> 
             None => {}
         }
 
+        // constructing heath check details
+        let health_check_enum = match current_image_details.health_check.clone() {
+            Some(health_polling_details) => ContainerInspectType::Health(health_polling_details),
+            None => ContainerInspectType::Status,
+        };
+
         // starting container , whether it is to be build or start image(local or docker image)
         match &current_image_details.build {
             // build can be  (. / folder path)
@@ -99,7 +111,7 @@ pub async fn yaml_parser(file_path: impl Into<String>) -> Result<(), CliErrors> 
                     println!("this is the conatiner name {conatiner_name}");
                     build_current_folder_image(
                         conatiner_name.to_owned(),
-                        &inspect_type,
+                        &health_check_enum,
                         h_p.to_owned(),
                         c_p.to_owned(),
                         &mut this_project_labels,
@@ -127,16 +139,6 @@ pub async fn yaml_parser(file_path: impl Into<String>) -> Result<(), CliErrors> 
                     pull_image_locally(&docker, image_name.to_owned()).await?;
                 }
 
-                let health_check_enum = match current_image_details.health_check.clone() {
-                    Some(health_polling_details) =>{
-                        ContainerInspectType::Health(health_polling_details)
-                    },
-                    None =>{
-                        ContainerInspectType::Status
-                    }
-                    
-                }; 
-
                 start_image_in_container(
                     &docker,
                     image_name.to_owned(),
@@ -159,6 +161,7 @@ pub async fn yaml_parser(file_path: impl Into<String>) -> Result<(), CliErrors> 
 /**
  * @input => input docker compose.yaml file path
  * @reslut => we are validating that file is present and it is a valid docker compose.yaml file
+ * and then returing proper formatted map and vec of service is correct dependecy order
  */
 pub fn validate_file_path(
     i_file_path: &str,
@@ -170,16 +173,9 @@ pub fn validate_file_path(
     ),
     CliErrors,
 > {
-    // string to file path
     let file_path = Path::new(i_file_path);
-
-    // geting file name from path
-    let file_name = file_path
-        .file_name()
-        .ok_or(CliErrors::file_name_extraction_fail())?;
-    let file_name = file_name
-        .to_str()
-        .ok_or(CliErrors::file_name_extraction_fail())?;
+    // string to file path
+    let file_name = file_name(i_file_path, FilePathType::FilePath)?;
 
     // validating file path
     let file_exist = fs::exists(&file_path).map_err(|e| CliErrors::new(e.to_string()))?;
@@ -188,7 +184,7 @@ pub fn validate_file_path(
     }
 
     // checking if this input file name exist or not
-    let ans = FILE_NAMES.contains(&file_name);
+    let ans = FILE_NAMES.contains(&file_name.as_ref());
 
     // validating file name
     if !ans {
@@ -200,8 +196,7 @@ pub fn validate_file_path(
     let compose_content = serde_yaml::from_str::<Compose>(&file_content)
         .map_err(|e| CliErrors::new(e.to_string()))?;
 
-
-    println!("this is the compose content {:?} " , compose_content);
+    println!("this is the compose content {:?} ", compose_content);
 
     let services = &compose_content.services;
 
@@ -235,6 +230,7 @@ pub async fn create_network(
 
     let mut labels: HashMap<String, String> = HashMap::new();
 
+    // label , under which all the conatiners will come
     labels.insert(
         "com.docker.compose.project".to_string(),
         network_name.to_owned(),
@@ -244,9 +240,37 @@ pub async fn create_network(
 
     endpoints.insert(network_name.to_owned(), EndpointSettings::default());
 
+    
     let networking_config = NetworkingConfig {
         endpoints_config: Some(endpoints),
     };
 
     Ok((labels, networking_config))
+}
+
+/**
+ * THIS WILL take current_folder/filepath as input and return the file/folder name in that path
+ */
+pub fn file_name(i_file_path: &str, file_type: FilePathType) -> Result<String, CliErrors> {
+    // if we specify path = current+folder , then we will give current folder nname
+    let file_path: PathBuf = match file_type {
+        FilePathType::CurrentDir => {
+            env::current_dir().map_err(|e| CliErrors::new(format!("{}", { e.to_string() })))?
+        }
+        // else the name of the file in the path
+        FilePathType::FilePath => {
+            // string to file path
+            PathBuf::from(i_file_path)
+        }
+    };
+
+    // geting file name from path
+    let file_name = file_path
+        .file_name()
+        .ok_or(CliErrors::file_name_extraction_fail())?;
+    let file_name = file_name
+        .to_str()
+        .ok_or(CliErrors::file_name_extraction_fail())?;
+
+    Ok(file_name.to_string())
 }

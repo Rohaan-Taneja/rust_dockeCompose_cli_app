@@ -103,8 +103,6 @@ if we are giving conatiner name , then why it is not showing up in the ui , cona
 correct the for loop , wait for the service to start then start the next service ❓❓
 
 
-
-
 see how to start all services in 1 conatiner - ✅
     connect to same network✅
     add labels , then docker group them together✅
@@ -116,10 +114,23 @@ port binding corrected  ✅
 
 ## 📅 6th March 2026
 conatiner starting properly in porper order , waitng for the current once to start then next is starting  ✅
+thoda sa dekha 
+did not do anything
 
 
- we will do stop , status and other
+## 📅 7th March 2026
+aaj , 6th and aaj ka kaam compesate krna hai 
 
+conatiners label is now current dir name  ✅
+modularize the file name form file_pah  ✅
+
+delete containers + network properly of down command ✅
+
+2) then create a logger service to show logs of service in colour and show service name also in that colour
+3) then think how to status thing
+
+
+need to do solana , will continue on 10th 
 
 
 
@@ -133,7 +144,7 @@ this_project_network ❓❓
 2) then see how to build when git repo is provided ❓
 
 
-4) how all. containers are present in 1 container only ❓
+4) how all. containers are present in 1 group only ❓
 
 5) env given ❓
 
@@ -141,8 +152,11 @@ this_project_network ❓❓
 
 7) waiting for a service to start , then next service is starting , status and healthcheck ❓
 
+8) we are deleteting the containers of down command , can we do stop and restarting ❓
+
 8) health check not added , it is hardcoded , do it ❓
 port is propvided , (but add error handling , see what if same port is given )❓
+
 
 
 

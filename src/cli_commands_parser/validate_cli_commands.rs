@@ -4,7 +4,7 @@ use std::{env, fmt, fs, path::Path, str::FromStr};
 
 use docker_compose_types::Compose;
 
-use crate::{cli_errors::CliErrors, yaml_parser::{yaml_parser}};
+use crate::{cli_errors::CliErrors, docker::delete_container::{delete_container}, yaml_parser::yaml_parser};
 
 use serde::{Deserialize, Serialize};
 
@@ -53,7 +53,7 @@ impl fmt::Display for CliCommands {
 pub async fn validate_command(
     cli_name: String,
     cli_command: String,
-    file_path: String, //docker compose file path
+    argument: String, //docker compose file path
 ) -> Result<bool, CliErrors> {
     if cli_name != CliName::DockYard.to_string() {
         return Err(CliErrors::wrong_cli_name());
@@ -69,19 +69,23 @@ pub async fn validate_command(
         CliCommands::Up => {
 
             
-            let ans = yaml_parser(&file_path).await.map_err(|e| e)?;
+            // here argument is the docker compose.yaml file path
+            yaml_parser(&argument).await.map_err(|e| e)?;
           
             println!("this is the up command proces , we will parse the docker compose file , start the ")
         }
         CliCommands::Down => {
-            println!("this is the down command process")
+            println!("this is the down command process");
+
+            delete_container(&argument).await.map_err(|e| e)?;
+
         }
         CliCommands::Logs => {
             println!("this is the logs command proces")
         }
         CliCommands::Status => {
             println!("this is the status command process")
-        }
+        },
     }
 
     Ok(true)

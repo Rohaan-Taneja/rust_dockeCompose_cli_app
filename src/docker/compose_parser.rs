@@ -6,7 +6,7 @@ use std::{
     path::Path,
 };
 
-use crate::{cli_errors::CliErrors, docker::service_sort::sort_services};
+use crate::{cli_errors::CliErrors, docker::service_sort::sort_services, yaml_parser::{FilePathType, file_name}};
 use indexmap::IndexMap;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -86,16 +86,7 @@ pub fn add_service_to_service_map(
     let mut container_name = compose_service_data.container_name;
 
     // we are extracting folder name of this project
-    let file_path =
-        env::current_dir().map_err(|e| CliErrors::new(format!("{}", { e.to_string() })))?;
-
-    // geting file name from path
-    let file_name = file_path
-        .file_name()
-        .ok_or(CliErrors::file_name_extraction_fail())?;
-    let file_name = file_name
-        .to_str()
-        .ok_or(CliErrors::file_name_extraction_fail())?;
+    let file_name = file_name("" , FilePathType::CurrentDir)?;
 
     // projectName_service_name
     if image_name.is_none() {
