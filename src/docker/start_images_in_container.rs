@@ -25,6 +25,11 @@ use std::{
 use tokio::process::Command;
 use tokio_util::io::ReaderStream;
 
+use crate::cli_memory;
+use crate::logs::service_logs::{
+    service_logs, service_logs_messages, service_started, show_pulled_image_specific_logs,
+    show_service_error_logs,
+};
 use crate::{cli_errors::CliErrors, yaml_parser::ContainerInspectType};
 
 use futures_util::{Stream, StreamExt};
@@ -34,15 +39,17 @@ use futures_util::{Stream, StreamExt};
  * and also consoling the logs
  */
 pub async fn build_current_folder_image(
+    service_name : String,
     image_tag: String,
     inspect_type: &ContainerInspectType,
     host_port: Option<String>,
     cont_port: Option<String>,
     this_project_labels: &mut HashMap<String, String>,
     this_project_network: &NetworkingConfig,
+    app_state: Arc<cli_memory>,
 ) -> Result<bool, CliErrors> {
     // we can change it according input provided
-    let to_be_built_image_tag = image_tag;
+    let to_be_built_image_tag = image_tag.to_string();
 
     let docker =
         Docker::connect_with_local_defaults().map_err(|e| CliErrors::new(e.to_string()))?;
@@ -56,34 +63,38 @@ pub async fn build_current_folder_image(
     // let body = convert_to_tar_archive().await.map_err(|e| e)?;
     let body = convert_current_folder_to_tar_stream().map_err(|e| e)?;
 
-    // println!("i am after tar build call {:?}" , body);
-
     let mut image_build_stream = docker.build_image(
         build_image_options.build(),
         None,
         Some(http_body_util::Either::Right(body)),
     );
 
-    println!("this is the build stream");
     while let Some(msg) = image_build_stream.next().await {
         match msg {
             Ok(msg) => {
-                println!("msg {:?}", msg);
+                service_logs(&service_name, msg, Arc::clone(&app_state));
             }
             Err(e) => {
-                println!("error in message {e}");
+                let error_message = format!(
+                    "error while building the current folder image {} => {}",
+                    image_tag,
+                    e.to_string()
+                );
+                show_service_error_logs(&service_name, &error_message, Arc::clone(&app_state));
             }
         }
     }
 
     start_image_in_container(
         &docker,
+        service_name,
         to_be_built_image_tag,
         inspect_type,
         host_port.to_owned(),
         cont_port.to_owned(),
         &this_project_network,
         this_project_labels,
+        Arc::clone(&app_state),
     )
     .await?;
 
@@ -94,9 +105,9 @@ pub async fn build_current_folder_image(
  * @input  => local docker referece and image to pull from docker
  * @result => we will pull the image from the docker hub ans start in the conatiner
  */
-pub async fn pull_image_locally(docker: &Docker, image_name: String) -> Result<bool, CliErrors> {
+pub async fn pull_image_locally(docker: &Docker, service_name : String ,  image_name: String , app_state: Arc<cli_memory>) -> Result<bool, CliErrors> {
     let image_options = Some(CreateImageOptions {
-        from_image: Some(image_name),
+        from_image: Some(image_name.to_string()),
         ..Default::default()
     });
 
@@ -105,15 +116,20 @@ pub async fn pull_image_locally(docker: &Docker, image_name: String) -> Result<b
     while let Some(pull_result) = stream.next().await {
         match pull_result {
             Ok(res) => {
-                println!("build steps {res:?}");
+                show_pulled_image_specific_logs(&image_name, res , Arc::clone(&app_state));
             }
             Err(e) => {
-                println!("build steps error {e:?}");
+                let error_message = format!(
+                    "pulling image => {} , error = {}",
+                    image_name,
+                    e.to_string()
+                );
+                show_service_error_logs(&service_name, &error_message , Arc::clone(&app_state));
             }
         }
     }
 
-    println!("image pulled successfully");
+    service_logs_messages(&service_name, "image pulled successfully" , Arc::clone(&app_state));
     Ok(true)
 }
 
@@ -133,8 +149,6 @@ pub async fn check_image_locally(docker: &Docker, image_tag_name: &str) -> Resul
             && image.repo_tags.len() > 0
             && image.repo_tags[0] == image_tag_name
         {
-            println!("this is the image {:?}", image.repo_tags[0]);
-
             return Ok(true);
         }
     }
@@ -181,14 +195,16 @@ fn convert_current_folder_to_tar_stream() -> Result<
  */
 pub async fn start_image_in_container(
     docker: &Docker,
+    service_name : String,
     image_tag: String,
     inspect_type: &ContainerInspectType,
     host_port: Option<String>,
     cont_port: Option<String>,
     network_config: &NetworkingConfig,
     labels: &mut HashMap<String, String>,
+    app_state: Arc<cli_memory>,
 ) -> Result<bool, CliErrors> {
-    println!(" I am starting the container");
+    service_logs_messages(&service_name, "starting image in conatiner", Arc::clone(&app_state));
 
     // by default , no ports
     // if prots assigned , we will change these configs and give it to the struct below
@@ -214,10 +230,6 @@ pub async fn start_image_in_container(
             ..Default::default()
         })
     }
-
-    // Define port bindings (host side)
-
-    println!(" connected with default");
 
     // if health check(healthy) is given the we will give data else none is given
     let health_config: Option<HealthConfig> = match inspect_type {
@@ -249,12 +261,13 @@ pub async fn start_image_in_container(
         )
         .await
         .map_err(|e| {
-            println!("docker not starting {e}");
+            show_service_error_logs(&service_name, &e.to_string() , Arc::clone(&app_state));
             CliErrors::new(e.to_string())
         })?
         .id;
 
-    println!(" container created , id = {}", &container_id);
+    let service_started_data = format!(" container created , id = {}", &container_id);
+    service_logs_messages(&service_name, &service_started_data , Arc::clone(&app_state));
 
     // conatiner starts and function exist , it runs in baclground for now
     docker
@@ -264,14 +277,15 @@ pub async fn start_image_in_container(
         )
         .await
         .map_err(|e| {
-            println!("this is the conatiner starting error {e}");
+            let err_starting_cont = format!("conatainer starting error {e}");
+            show_service_error_logs(&service_name, &err_starting_cont , Arc::clone(&app_state));
 
             CliErrors::new(e.to_string())
         })?;
 
-    println!("container started");
+    service_logs_messages(&service_name, "container started" , Arc::clone(&app_state));
 
-    wait_until_conatiner_running(&docker, &container_id, inspect_type).await?;
+    wait_until_conatiner_running(service_name.to_string() , &image_tag, &docker, &container_id, inspect_type ,Arc::clone(&app_state) ).await?;
 
     Ok(true)
 }
@@ -281,17 +295,18 @@ pub async fn start_image_in_container(
  * we will keep seeing the conatiner status untill it is ready
  */
 pub async fn wait_until_conatiner_running(
+    service_name : String,
+    image_tag: &str,
     docker: &Docker,
     container_id: &str,
     inspect_type: &ContainerInspectType,
+    app_state: Arc<cli_memory>
 ) -> Result<bool, CliErrors> {
     loop {
         // running/healthy
-        let res = container_status(&docker, &container_id, &inspect_type)
+        let res = container_status( service_name.to_string() , &image_tag, &docker, &container_id, &inspect_type , Arc::clone(&app_state))
             .await
             .map_err(|e| e)?;
-
-        println!("this is the res for container status {res}");
 
         // for status , if status is running break and go
         // health , if status is healthy , break and go
@@ -308,16 +323,12 @@ pub async fn wait_until_conatiner_running(
                 if res == "healthy".to_owned() {
                     break;
                 }
+
+                
+                sleep(Duration::from_secs(3));
             }
         }
 
-        // if none is matched , then we will sleep fo 2 sec and poll again for status/health
-        let current_time = time::Instant::now();
-        sleep(Duration::new(2, 0));
-
-        let after_time = time::Instant::now();
-
-        println!("current time was {current_time:?} and after time is {after_time:?}");
     }
 
     Ok(true)
@@ -327,12 +338,13 @@ pub async fn wait_until_conatiner_running(
  * this function will poll the container and check its status/health(service running or not)
  */
 pub async fn container_status(
+    service_name : String,
+    image_tag: &str,
     docker: &Docker,
     container_id: &str,
     inspect_type: &ContainerInspectType,
+    app_state: Arc<cli_memory>
 ) -> Result<String, CliErrors> {
-    println!("I am here");
-
     // polling and getting conatiner status
     let container_inspect_response = docker
         .inspect_container(
@@ -345,22 +357,18 @@ pub async fn container_status(
         )
         .await
         .map_err(|e| {
-            println!("this is the error in starting the conatiner {e}");
+            let e_msg = format!("error in starting the conatiner {e}");
+            show_service_error_logs(&service_name, &e_msg , Arc::clone(&app_state));
+
             CliErrors::new(e.to_string())
         })?
         .state
         .ok_or_else(|| CliErrors::new("getting none while inspecting the conatiner".to_string()))?;
 
-    println!(
-        "I am after conatiner inspect res {:?}",
-        &container_inspect_response
-    );
-
     // match inspect type , whetehr we want to check just running conatiner
     // or check if the service is healthy/running or not
     match inspect_type {
         ContainerInspectType::Status => {
-            println!("I am in status check");
             let ans_status = container_inspect_response
                 .status
                 .ok_or_else(|| {
@@ -369,17 +377,15 @@ pub async fn container_status(
                 .to_string();
 
             if ans_status == "running".to_string() {
-                println!("STATUS == RUNNING");
+                service_logs_messages(&service_name, "image is running" , Arc::clone(&app_state));
             }
-            println!(
-                "this is the container ispect state in status check {}",
-                ans_status
-            );
+
+            let cont_status = format!(" image running in container , status = {}", ans_status);
+            service_logs_messages(&service_name, &cont_status , Arc::clone(&app_state));
 
             Ok(ans_status)
         }
         ContainerInspectType::Health(polling_details) => {
-            println!("i am in health check");
             let ans_health = container_inspect_response
                 .health
                 .ok_or_else(|| CliErrors::new("getting error in heath check".to_string()))?
@@ -389,10 +395,11 @@ pub async fn container_status(
                 })?
                 .to_string();
 
-            println!(
-                "this is the container ispect state in health check {:?}",
+            let cont_health_status = format!(
+                "image running in conatiner, health check = {:?}",
                 ans_health
             );
+            service_logs_messages(&service_name, &cont_health_status , Arc::clone(&app_state));
 
             return Ok(ans_health);
         }

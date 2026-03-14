@@ -126,23 +126,41 @@ modularize the file name form file_pah  ✅
 
 delete containers + network properly of down command ✅
 
+
+need to do solana , will continue on 10th 
+
+## 📅 11th march
+created the logger service , with colourfull println!s, ✅
+now to give specific colour to each service , we though a pproach , will implemnt and comple it it tomorrow
+
+## 📅 12th march
+create random 4 alphabet string and attach to network/label name ❓❓ (same docker compose file , cannot run twice , so let it be like this only)
 2) then create a logger service to show logs of service in colour and show service name also in that colour
 3) then think how to status thing
 
 
-need to do solana , will continue on 10th 
+## 📅 13th march
+office
+did not do anything
+
+## 📅 14th march
+understand colour of logger service working
+create status cli api , show 
+and then see whoch things are left and how to improve the project (currently its a eash project)
 
 
+test starting and stopping again and then start with logs and status and enhancing the roject and code base
 
 
-this_project_network ❓❓
+see if we can stop the conatiners (not delete) and then restart them ❓❓
+
+this_project_network ❓❓ (we are taking network name ad this project name)
 <!-- network name is hardcoded , make it dynamic -->
 
 
 1) parallel wala thing we will see ❓❓
 
 2) then see how to build when git repo is provided ❓
-
 
 4) how all. containers are present in 1 group only ❓
 

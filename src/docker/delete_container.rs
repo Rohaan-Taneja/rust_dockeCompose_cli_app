@@ -1,15 +1,12 @@
-use std::{collections::HashMap, default};
+use std::collections::HashMap;
 
 use bollard::{
     Docker,
-    query_parameters::{
-        InspectNetworkOptions, ListContainersOptions, ListContainersOptionsBuilder,
-        RemoveContainerOptionsBuilder,
-    },
+    query_parameters::{ListContainersOptionsBuilder, RemoveContainerOptionsBuilder},
     secret::ContainerSummary,
 };
 
-use crate::cli_errors::CliErrors;
+use crate::{cli_errors::CliErrors, logs::service_logs::{general_message, service_delete_message}};
 
 pub async fn delete_container(network_name: &str) -> Result<bool, CliErrors> {
     let docker =
@@ -20,7 +17,6 @@ pub async fn delete_container(network_name: &str) -> Result<bool, CliErrors> {
 
     let docker_cont_list = list_all_filter_conatiners(&docker, "network", network_name).await?;
 
-    // println!("this is the list of cont {:?}", docker_cont_list);
     for cont in docker_cont_list {
         let cont_id = cont
             .id
@@ -28,19 +24,25 @@ pub async fn delete_container(network_name: &str) -> Result<bool, CliErrors> {
         let image_name = cont
             .image
             .ok_or_else(|| CliErrors::new("cannot find container id".to_string()))?;
-        println!(
-            "this is the list of conatiners in this network {} {}",
-            cont_id, image_name
-        );
 
         let options = RemoveContainerOptionsBuilder::default().force(true).build();
-        docker.remove_container(&cont_id, Some(options)).await.map_err(|e| CliErrors::new(e.to_string()))?;
-    
-        println!("stopped the cont id => {}" , cont_id);
+        docker
+            .remove_container(&cont_id, Some(options))
+            .await
+            .map_err(|e| CliErrors::new(e.to_string()))?;
+
+        let stop_message = format!("current stopped conatiner => {}", cont_id);
+        service_delete_message(&cont_id, &stop_message);
     }
 
+
     // removing the network after deleting all the containers
-    docker.remove_network(network_name).await.map_err(|e| CliErrors::new(e.to_string()))?;
+    docker
+        .remove_network(network_name)
+        .await
+        .map_err(|e| CliErrors::new(e.to_string()))?;
+    
+    general_message(&network_name, "Deleted network and disconnected all associated containers");
 
     Ok(true)
 }

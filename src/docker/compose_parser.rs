@@ -1,9 +1,8 @@
-use docker_compose_types::{BuildStep, DependsOnOptions, Environment, Healthcheck, Ports, Service};
+use docker_compose_types::{BuildStep, Environment, Healthcheck, Ports, Service};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, HashSet},
-    env,
-    path::Path,
+  
 };
 
 use crate::{cli_errors::CliErrors, docker::service_sort::sort_services, yaml_parser::{FilePathType, file_name}};
@@ -92,7 +91,6 @@ pub fn add_service_to_service_map(
     if image_name.is_none() {
         image_name = Some(format!("{}_{}", file_name, service_name));
     }
-    println!("this is the container name {:?}", &container_name);
 
     // if conatiner name is not specifed , and image and build is bot specified , hen image name is the container name
     if container_name.is_none() {
@@ -162,11 +160,6 @@ pub fn add_service_to_service_map(
         port: ports_tuple,
         environment_vars: enviroment_vars_hash,
     };
-
-    println!(
-        "this is the details of srvice {} = {:?}",
-        service_name, data_struct
-    );
 
     // added service details to the struct
     service_map.insert(service_name.to_string(), data_struct);

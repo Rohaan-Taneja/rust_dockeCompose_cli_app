@@ -8,12 +8,14 @@ use std::{
     env,
     fs::{self},
     path::{Path, PathBuf},
+    sync::Arc,
 };
 
 use docker_compose_types::{Compose, Healthcheck};
 
 use crate::{
     cli_errors::CliErrors,
+    cli_memory,
     docker::{
         compose_parser::{self, construct_docker_image_details_map},
         start_images_in_container::{
@@ -52,15 +54,18 @@ pub enum ContainerInspectType {
  * we will check if it is a valid or correct docker compose.yaml file or not
  * and then we will convert/parse that into docker compose data(version , services ,etc) which we can use to communicate with docker and start the services
  */
-pub async fn yaml_parser(file_path: impl Into<String>) -> Result<(), CliErrors> {
+pub async fn yaml_parser(
+    file_path: impl Into<String>,
+    app_state: Arc<cli_memory>,
+) -> Result<(), CliErrors> {
     let file_pathh = file_path.into();
 
     let docker =
         Docker::connect_with_local_defaults().map_err(|e| CliErrors::new(e.to_string()))?;
 
     // project network and labels(so as to add all containers under 1 folder in docker ui , like docker compose do)
+    // we are using current folder der name as label and network name
     let current_dir_name = file_name("", FilePathType::CurrentDir)?;
-    println!("this is the current dir name {}", &current_dir_name);
     let (mut this_project_labels, this_project_network) =
         create_network(&docker, current_dir_name).await?;
 
@@ -108,14 +113,15 @@ pub async fn yaml_parser(file_path: impl Into<String>) -> Result<(), CliErrors> 
             // build can be  (. / folder path)
             Some(build_file) => {
                 if build_file == "." {
-                    println!("this is the conatiner name {conatiner_name}");
                     build_current_folder_image(
+                        ser.to_string(),
                         conatiner_name.to_owned(),
                         &health_check_enum,
                         h_p.to_owned(),
                         c_p.to_owned(),
                         &mut this_project_labels,
                         &this_project_network,
+                        Arc::clone(&app_state),
                     )
                     .await?;
                 } else {
@@ -132,27 +138,32 @@ pub async fn yaml_parser(file_path: impl Into<String>) -> Result<(), CliErrors> 
                 })?;
 
                 let check_local_image = check_image_locally(&docker, &image_name).await?;
-                println!("this i the locall image ans {check_local_image}");
 
                 // if not present locally, it must be present in at docker hub , we will check there
                 if !check_local_image {
-                    pull_image_locally(&docker, image_name.to_owned()).await?;
+                    pull_image_locally(
+                        &docker,
+                        ser.to_string(),
+                        image_name.to_owned(),
+                        Arc::clone(&app_state),
+                    )
+                    .await?;
                 }
 
                 start_image_in_container(
                     &docker,
+                    ser.to_string(),
                     image_name.to_owned(),
                     &health_check_enum,
                     h_p.to_owned(),
                     c_p.to_owned(),
                     &this_project_network,
                     &mut this_project_labels,
+                    Arc::clone(&app_state),
                 )
                 .await?;
             }
         }
-
-        println!("this is the current runned service {}", ser);
     }
 
     Ok(())
@@ -196,16 +207,10 @@ pub fn validate_file_path(
     let compose_content = serde_yaml::from_str::<Compose>(&file_content)
         .map_err(|e| CliErrors::new(e.to_string()))?;
 
-    println!("this is the compose content {:?} ", compose_content);
-
     let services = &compose_content.services;
-
-    // println!("this is the file info {} {:?}", file_content, &services);
 
     // vec and hashmap of sorted serivces
     let ans = construct_docker_image_details_map(&services.0).map_err(|e| e)?;
-
-    println!("these are the services {ans:?}");
 
     Ok((ans.0, ans.1))
 }
@@ -240,7 +245,6 @@ pub async fn create_network(
 
     endpoints.insert(network_name.to_owned(), EndpointSettings::default());
 
-    
     let networking_config = NetworkingConfig {
         endpoints_config: Some(endpoints),
     };
