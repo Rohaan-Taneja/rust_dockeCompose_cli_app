@@ -144,9 +144,9 @@ office
 did not do anything
 
 ## 📅 14th march
-understand colour of logger service working
+understand colour of logger service working  ✅
 create status cli api , show 
-and then see whoch things are left and how to improve the project (currently its a eash project)
+and then see which things are left and how to improve the project (currently its a eash project)
 
 
 test starting and stopping again and then start with logs and status and enhancing the roject and code base
@@ -174,6 +174,8 @@ this_project_network ❓❓ (we are taking network name ad this project name)
 
 8) health check not added , it is hardcoded , do it ❓
 port is propvided , (but add error handling , see what if same port is given )❓
+
+9) improve dockerfile of the project , it should not download crated on evry image run , it should reuse them and boot up fast 
 
 
 

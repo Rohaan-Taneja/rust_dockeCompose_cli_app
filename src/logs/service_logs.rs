@@ -97,6 +97,14 @@ pub fn general_message(id: &str, message: &str) {
     println!("{} -> {:?}", id.green(), message);
 }
 
+
+/**
+ * green general message
+ */
+pub fn general_error_message(id: &str, message: &str) {
+    println!("{} -> {:?}", id.red(), message);
+}
+
 /**
  * this function wil hash the string into a u64 bits number
  * thenw e will % that number with COLORS.le() , so that number will comese in between 0 to len_of_COLORS_arry -1

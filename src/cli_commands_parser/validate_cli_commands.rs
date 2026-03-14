@@ -5,7 +5,9 @@ use std::{env, fmt, fs, path::Path, str::FromStr, sync::Arc};
 use docker_compose_types::Compose;
 
 use crate::{
-    cli_errors::CliErrors, cli_memory, docker::delete_container::delete_container,
+    cli_errors::CliErrors,
+    cli_memory,
+    docker::{container_logs::container_logs, delete_container::delete_container},
     yaml_parser::yaml_parser,
 };
 
@@ -78,10 +80,11 @@ pub async fn validate_command(
             delete_container(&argument).await.map_err(|e| e)?;
         }
         CliCommands::Logs => {
-            println!("this is the logs command proces")
+            println!("this is the logs command proces");
+            container_logs(argument).await?;
         }
         CliCommands::Status => {
-            println!("this is the status command process")
+            println!("this is the status command process");
         }
     }
 
