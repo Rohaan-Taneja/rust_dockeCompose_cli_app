@@ -10,6 +10,10 @@ use crate::{
     logs::service_logs::{general_error_message, general_message},
 };
 
+
+/**
+ * it will take cont name ir id and show all the logs till now of the cont
+ */
 pub async fn container_logs(cont_name: String) -> Result<bool, CliErrors> {
     println!("i came here");
 
@@ -39,8 +43,9 @@ pub async fn container_logs(cont_name: String) -> Result<bool, CliErrors> {
             LogOutput::StdOut { message } => {
                 println!("{}", String::from_utf8_lossy(&message));
             }
+            // showing error in red , it it occurs
             LogOutput::StdErr { message } => {
-                println!("{}", String::from_utf8_lossy(&message));
+                general_error_message(&cont_name, &String::from_utf8_lossy(&message));
             }
             LogOutput::Console { message } => {
                 print!("{}", String::from_utf8_lossy(&message));

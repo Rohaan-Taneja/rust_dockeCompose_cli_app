@@ -7,7 +7,10 @@ use docker_compose_types::Compose;
 use crate::{
     cli_errors::CliErrors,
     cli_memory,
-    docker::{container_logs::container_logs, delete_container::delete_container},
+    docker::{
+        container_logs::container_logs, container_status::docker_conatiner_status,
+        delete_container::delete_container,
+    },
     yaml_parser::yaml_parser,
 };
 
@@ -23,7 +26,7 @@ pub enum CliCommands {
     Up,
     Down,
     Logs,
-    Status,
+    Container_status,
 }
 
 impl fmt::Display for CliName {
@@ -40,7 +43,7 @@ impl FromStr for CliCommands {
             "Up" => Ok(CliCommands::Up),
             "Down" => Ok(CliCommands::Down),
             "Logs" => Ok(CliCommands::Logs),
-            "Status" => Ok(CliCommands::Status),
+            "Container_status" => Ok(CliCommands::Container_status),
             _ => Err(()),
         }
     }
@@ -83,8 +86,9 @@ pub async fn validate_command(
             println!("this is the logs command proces");
             container_logs(argument).await?;
         }
-        CliCommands::Status => {
+        CliCommands::Container_status => {
             println!("this is the status command process");
+            docker_conatiner_status(argument).await?;
         }
     }
 
