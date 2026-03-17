@@ -17,9 +17,10 @@ use crate::{
     cli_errors::CliErrors,
     cli_memory,
     docker::{
-        compose_parser::{self, construct_docker_image_details_map},
+        compose_parser::{self, DockerImageDetails, construct_docker_image_details_map},
         start_images_in_container::{
-            build_current_folder_image, check_image_locally, pull_image_locally,
+            build_current_folder_image, build_or_pull_start_image_in_conatiner,
+            check_and_start_network_containers, check_image_locally, pull_image_locally,
             start_image_in_container,
         },
     },
@@ -66,103 +67,51 @@ pub async fn yaml_parser(
     // project network and labels(so as to add all containers under 1 folder in docker ui , like docker compose do)
     // we are using current folder der name as label and network name
     let current_dir_name = file_name("", FilePathType::CurrentDir)?;
-    let (mut this_project_labels, this_project_network) =
-        create_network(&docker, current_dir_name).await?;
 
-    let this_compose_label = this_project_labels
-        .get("com.docker.compose.project")
-        .ok_or_else(|| CliErrors::new(String::from("getting erro while fetching the label ")))?;
+    // constructing labels for this project
+    let mut this_project_labels = create_lables(&current_dir_name).await?;
 
-    let (service_map, service_vec) =
-        validate_file_path(&file_pathh, this_compose_label.to_owned()).map_err(|e| e)?;
+    // getting service map and service vec in correct dependency order
+    let (service_map, service_vec) = validate_file_path(&file_pathh).map_err(|e| e)?;
 
-    // loop over service , and start the images in conatiner 1 by 1
-    // if build = . , build current folder , if image name , then pull/build image accordingly
-    for ser in service_vec {
-        let current_image_details = service_map
-            .get(&ser)
-            .ok_or_else(|| CliErrors::new(format!("getting some erro whil extracting {ser}")))?;
+    // check network and if network.conatiner.len() > 0 , then call restart , else move formward
 
-        let conatiner_name = current_image_details
-            .container_name
-            .clone()
-            .ok_or_else(|| {
-                CliErrors::new(format!("no container name found for service =  {ser}"))
-            })?;
+    // getting network config for existing network
+    let networking_config = get_network_config(&current_dir_name);
 
-        // ports from the service
-        let mut h_p = None;
-        let mut c_p = None;
-        match current_image_details.port.clone() {
-            Some(prts) => {
-                h_p = Some(prts.0);
-                c_p = Some(prts.1);
-            }
-            // ports are none
-            None => {}
-        }
+    //  we have service array and labels(current dir name)(lables are neende dwhile starting image in conatiner)
+    let ans = check_and_start_network_containers(
+        &docker,
+        &current_dir_name,
+        &service_vec,
+        &service_map,
+        &mut this_project_labels,
+        &networking_config,
+        Arc::clone(&app_state),
+    )
+    .await?;
 
-        // constructing heath check details
-        let health_check_enum = match current_image_details.health_check.clone() {
-            Some(health_polling_details) => ContainerInspectType::Health(health_polling_details),
-            None => ContainerInspectType::Status,
-        };
+    // if ans == false it measn (either no network for this project is present ot conatiners are not present)
+    // starting images in conatiner , if they are not present in existing conatiners
+    // if network is not present or network has 0 conatiners ,
+    // if more that 1  , then we will restart(the existing containers) + build/pull( whose containers are not present)
+    // starting images in new conatiners
+    if !ans {
+        // creating network for this project , so that all the conatiners can be in this network and can communicate with each other
+        let this_project_network = create_network(&docker, &current_dir_name).await?;
 
-        // starting container , whether it is to be build or start image(local or docker image)
-        match &current_image_details.build {
-            // build can be  (. / folder path)
-            Some(build_file) => {
-                if build_file == "." {
-                    build_current_folder_image(
-                        ser.to_string(),
-                        conatiner_name.to_owned(),
-                        &health_check_enum,
-                        h_p.to_owned(),
-                        c_p.to_owned(),
-                        &mut this_project_labels,
-                        &this_project_network,
-                        Arc::clone(&app_state),
-                    )
-                    .await?;
-                } else {
-                    return Err(CliErrors::new(format!(
-                        "currently we are supporting building only current or images present locally or in docker hub"
-                    )));
-                }
-            }
-            // if build is none , then image will be there either local image or we will get it from docker
-            None => {
-                // if image is present locally , we will run it directly in the conatiner , else check in docker hub , if present there , pull it and then we will call start image in conatiner
-                let image_name = current_image_details.image.clone().ok_or_else(|| {
-                    CliErrors::new(format!("no image name is provided for service => {ser}"))
-                })?;
-
-                let check_local_image = check_image_locally(&docker, &image_name).await?;
-
-                // if not present locally, it must be present in at docker hub , we will check there
-                if !check_local_image {
-                    pull_image_locally(
-                        &docker,
-                        ser.to_string(),
-                        image_name.to_owned(),
-                        Arc::clone(&app_state),
-                    )
-                    .await?;
-                }
-
-                start_image_in_container(
-                    &docker,
-                    ser.to_string(),
-                    image_name.to_owned(),
-                    &health_check_enum,
-                    h_p.to_owned(),
-                    c_p.to_owned(),
-                    &this_project_network,
-                    &mut this_project_labels,
-                    Arc::clone(&app_state),
-                )
-                .await?;
-            }
+        // loop over service , and start the images in conatiner 1 by 1
+        // if build = . , build current folder , if image name , then pull/build image accordingly
+        for ser in service_vec {
+            build_or_pull_start_image_in_conatiner(
+                &docker,
+                ser,
+                &service_map,
+                &mut this_project_labels,
+                &this_project_network,
+                Arc::clone(&app_state),
+            )
+            .await?;
         }
     }
 
@@ -176,7 +125,6 @@ pub async fn yaml_parser(
  */
 pub fn validate_file_path(
     i_file_path: &str,
-    label: String,
 ) -> Result<
     (
         HashMap<String, compose_parser::DockerImageDetails>,
@@ -220,36 +168,16 @@ pub fn validate_file_path(
  * we need this labels to give a tag.label to each conatiner , so that docker can group the conatiners on the basis of this lables
  * we need this network , so docker can put these conatiner in this specified network
  */
-pub async fn create_network(
-    docker: &Docker,
-    network_name: String,
-) -> Result<(HashMap<String, String>, NetworkingConfig), CliErrors> {
-    let config = NetworkCreateRequest {
-        name: String::from(network_name.to_owned()),
-        ..Default::default()
-    };
-    docker
-        .create_network(config)
-        .await
-        .map_err(|e| CliErrors::new(String::from(format!("{}", { e.to_string() }))))?;
-
+pub async fn create_lables(label_name: &str) -> Result<HashMap<String, String>, CliErrors> {
     let mut labels: HashMap<String, String> = HashMap::new();
 
     // label , under which all the conatiners will come
     labels.insert(
         "com.docker.compose.project".to_string(),
-        network_name.to_owned(),
+        label_name.to_owned(),
     );
 
-    let mut endpoints = HashMap::new();
-
-    endpoints.insert(network_name.to_owned(), EndpointSettings::default());
-
-    let networking_config = NetworkingConfig {
-        endpoints_config: Some(endpoints),
-    };
-
-    Ok((labels, networking_config))
+    Ok(labels)
 }
 
 /**
@@ -277,4 +205,48 @@ pub fn file_name(i_file_path: &str, file_type: FilePathType) -> Result<String, C
         .ok_or(CliErrors::file_name_extraction_fail())?;
 
     Ok(file_name.to_string())
+}
+
+/**
+ * called , when we have to create new network in the docker
+ * function to create network for this project
+ * and return network config struct
+ */
+pub async fn create_network(
+    docker: &Docker,
+    network_name: &str,
+) -> Result<NetworkingConfig, CliErrors> {
+    // creating new network
+    let config = NetworkCreateRequest {
+        name: String::from(network_name.to_owned()),
+        ..Default::default()
+    };
+    docker
+        .create_network(config)
+        .await
+        .map_err(|e| CliErrors::new(String::from(format!("{}", { e.to_string() }))))?;
+
+    // constructing networkConfig for the newly created network
+    let net_config = get_network_config(network_name);
+
+    Ok(net_config)
+}
+
+/**
+ * called ,when we just have want networkconfig struct for existing network name
+ * this is not creating a new network
+ * this will just create and return network config struct
+ * just a wrapper around network name
+ *
+ */
+pub fn get_network_config(network_name: &str) -> NetworkingConfig {
+    let mut endpoints = HashMap::new();
+
+    endpoints.insert(network_name.to_owned(), EndpointSettings::default());
+
+    let networking_config = NetworkingConfig {
+        endpoints_config: Some(endpoints),
+    };
+
+    networking_config
 }

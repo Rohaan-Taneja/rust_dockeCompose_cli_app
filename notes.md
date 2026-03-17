@@ -145,11 +145,21 @@ did not do anything
 
 ## 📅 14th march
 understand colour of logger service working  ✅
-create status cli api , show 
+create status cli api , show ✅
+
+## 📅 15th march
 and then see which things are left and how to improve the project (currently its a eash project)
 
 
-test starting and stopping again and then start with logs and status and enhancing the roject and code base
+## 📅 16th march 
+restart all conatiner functionality ✅
+in labels map , we have com.docker.compose.service" , whihc store service name in conatinerSummary struct
+and in the servicemap ,we have service name
+so we connected conatiner_id and services with service name (in conatinersummary.lable[com.docker.compose.service"] and service_map)
+
+## 📅 17th march
+integrated restarting of conatiners correctly with th existing yaml parser function ✅
+write stopiing of conatiner function
 
 
 see if we can stop the conatiners (not delete) and then restart them ❓❓
@@ -176,6 +186,8 @@ this_project_network ❓❓ (we are taking network name ad this project name)
 port is propvided , (but add error handling , see what if same port is given )❓
 
 9) improve dockerfile of the project , it should not download crated on evry image run , it should reuse them and boot up fast 
+
+10) handle ctrl + c command 
 
 
 

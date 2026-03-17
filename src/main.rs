@@ -28,12 +28,12 @@ pub struct CLI {
 }
 
 pub struct cli_memory {
-    service_map: DashMap<String, usize>,
+    pub service_map: DashMap<String, usize>,
 }
 
 #[tokio::main]
 async fn main() -> Result<(), CliErrors> {
-    init_logging();
+    // init_logging();
 
     let image_map = DashMap::<String, usize>::new();
 

@@ -1,4 +1,5 @@
 use bollard::models::{EndpointSettings, NetworkingConfig};
+use bollard::query_parameters::RestartContainerOptionsBuilder;
 use bollard::secret::{HealthConfig, NetworkCreateRequest};
 use bollard::{
     Docker,
@@ -26,6 +27,8 @@ use tokio::process::Command;
 use tokio_util::io::ReaderStream;
 
 use crate::cli_memory;
+use crate::docker::compose_parser::DockerImageDetails;
+use crate::docker::delete_container::{list_all_filter_conatiners, validate_network};
 use crate::logs::service_logs::{
     service_logs, service_logs_messages, service_started, show_pulled_image_specific_logs,
     show_service_error_logs,
@@ -39,7 +42,7 @@ use futures_util::{Stream, StreamExt};
  * and also consoling the logs
  */
 pub async fn build_current_folder_image(
-    service_name : String,
+    service_name: String,
     image_tag: String,
     inspect_type: &ContainerInspectType,
     host_port: Option<String>,
@@ -72,7 +75,7 @@ pub async fn build_current_folder_image(
     while let Some(msg) = image_build_stream.next().await {
         match msg {
             Ok(msg) => {
-                service_logs(&service_name, msg, Arc::clone(&app_state));
+                service_logs(&service_name, msg);
             }
             Err(e) => {
                 let error_message = format!(
@@ -80,7 +83,7 @@ pub async fn build_current_folder_image(
                     image_tag,
                     e.to_string()
                 );
-                show_service_error_logs(&service_name, &error_message, Arc::clone(&app_state));
+                show_service_error_logs(&service_name, &error_message);
             }
         }
     }
@@ -105,7 +108,12 @@ pub async fn build_current_folder_image(
  * @input  => local docker referece and image to pull from docker
  * @result => we will pull the image from the docker hub ans start in the conatiner
  */
-pub async fn pull_image_locally(docker: &Docker, service_name : String ,  image_name: String , app_state: Arc<cli_memory>) -> Result<bool, CliErrors> {
+pub async fn pull_image_locally(
+    docker: &Docker,
+    service_name: String,
+    image_name: String,
+    app_state: Arc<cli_memory>,
+) -> Result<bool, CliErrors> {
     let image_options = Some(CreateImageOptions {
         from_image: Some(image_name.to_string()),
         ..Default::default()
@@ -116,7 +124,7 @@ pub async fn pull_image_locally(docker: &Docker, service_name : String ,  image_
     while let Some(pull_result) = stream.next().await {
         match pull_result {
             Ok(res) => {
-                show_pulled_image_specific_logs(&image_name, res , Arc::clone(&app_state));
+                show_pulled_image_specific_logs(&image_name, res);
             }
             Err(e) => {
                 let error_message = format!(
@@ -124,12 +132,15 @@ pub async fn pull_image_locally(docker: &Docker, service_name : String ,  image_
                     image_name,
                     e.to_string()
                 );
-                show_service_error_logs(&service_name, &error_message , Arc::clone(&app_state));
+                show_service_error_logs(&service_name, &error_message);
             }
         }
     }
 
-    service_logs_messages(&service_name, "image pulled successfully" , Arc::clone(&app_state));
+    service_logs_messages(
+        &service_name,
+        "image pulled successfully",
+    );
     Ok(true)
 }
 
@@ -195,7 +206,7 @@ fn convert_current_folder_to_tar_stream() -> Result<
  */
 pub async fn start_image_in_container(
     docker: &Docker,
-    service_name : String,
+    service_name: String,
     image_tag: String,
     inspect_type: &ContainerInspectType,
     host_port: Option<String>,
@@ -204,7 +215,10 @@ pub async fn start_image_in_container(
     labels: &mut HashMap<String, String>,
     app_state: Arc<cli_memory>,
 ) -> Result<bool, CliErrors> {
-    service_logs_messages(&service_name, "starting image in conatiner", Arc::clone(&app_state));
+    service_logs_messages(
+        &service_name,
+        "starting image in conatiner",
+    );
 
     // by default , no ports
     // if prots assigned , we will change these configs and give it to the struct below
@@ -243,7 +257,10 @@ pub async fn start_image_in_container(
         }
     };
 
-    labels.insert("com.docker.compose.service".to_string(), image_tag.clone());
+    labels.insert(
+        "com.docker.compose.service".to_string(),
+        service_name.to_owned(),
+    );
 
     // Create container and docker port binding with local computer ip and port
     let container_id = docker
@@ -261,13 +278,13 @@ pub async fn start_image_in_container(
         )
         .await
         .map_err(|e| {
-            show_service_error_logs(&service_name, &e.to_string() , Arc::clone(&app_state));
+            show_service_error_logs(&service_name, &e.to_string());
             CliErrors::new(e.to_string())
         })?
         .id;
 
     let service_started_data = format!(" container created , id = {}", &container_id);
-    service_logs_messages(&service_name, &service_started_data , Arc::clone(&app_state));
+    service_logs_messages(&service_name, &service_started_data);
 
     // conatiner starts and function exist , it runs in baclground for now
     docker
@@ -278,14 +295,21 @@ pub async fn start_image_in_container(
         .await
         .map_err(|e| {
             let err_starting_cont = format!("conatainer starting error {e}");
-            show_service_error_logs(&service_name, &err_starting_cont , Arc::clone(&app_state));
+            show_service_error_logs(&service_name, &err_starting_cont);
 
             CliErrors::new(e.to_string())
         })?;
 
-    service_logs_messages(&service_name, "container started" , Arc::clone(&app_state));
+    service_logs_messages(&service_name, "container started");
 
-    wait_until_conatiner_running(service_name.to_string() , &image_tag, &docker, &container_id, inspect_type ,Arc::clone(&app_state) ).await?;
+    wait_until_conatiner_running(
+        service_name.to_string(),
+        &image_tag,
+        &docker,
+        &container_id,
+        inspect_type,
+    )
+    .await?;
 
     Ok(true)
 }
@@ -295,18 +319,23 @@ pub async fn start_image_in_container(
  * we will keep seeing the conatiner status untill it is ready
  */
 pub async fn wait_until_conatiner_running(
-    service_name : String,
+    service_name: String,
     image_tag: &str,
     docker: &Docker,
     container_id: &str,
     inspect_type: &ContainerInspectType,
-    app_state: Arc<cli_memory>
 ) -> Result<bool, CliErrors> {
     loop {
         // running/healthy
-        let res = container_status( service_name.to_string() , &image_tag, &docker, &container_id, &inspect_type , Arc::clone(&app_state))
-            .await
-            .map_err(|e| e)?;
+        let res = container_status(
+            service_name.to_string(),
+            &image_tag,
+            &docker,
+            &container_id,
+            &inspect_type,
+        )
+        .await
+        .map_err(|e| e)?;
 
         // for status , if status is running break and go
         // health , if status is healthy , break and go
@@ -324,11 +353,9 @@ pub async fn wait_until_conatiner_running(
                     break;
                 }
 
-                
                 sleep(Duration::from_secs(3));
             }
         }
-
     }
 
     Ok(true)
@@ -338,12 +365,11 @@ pub async fn wait_until_conatiner_running(
  * this function will poll the container and check its status/health(service running or not)
  */
 pub async fn container_status(
-    service_name : String,
+    service_name: String,
     image_tag: &str,
     docker: &Docker,
     container_id: &str,
     inspect_type: &ContainerInspectType,
-    app_state: Arc<cli_memory>
 ) -> Result<String, CliErrors> {
     // polling and getting conatiner status
     let container_inspect_response = docker
@@ -358,7 +384,7 @@ pub async fn container_status(
         .await
         .map_err(|e| {
             let e_msg = format!("error in starting the conatiner {e}");
-            show_service_error_logs(&service_name, &e_msg , Arc::clone(&app_state));
+            show_service_error_logs(&service_name, &e_msg);
 
             CliErrors::new(e.to_string())
         })?
@@ -377,11 +403,11 @@ pub async fn container_status(
                 .to_string();
 
             if ans_status == "running".to_string() {
-                service_logs_messages(&service_name, "image is running" , Arc::clone(&app_state));
+                service_logs_messages(&service_name, "image is running");
             }
 
             let cont_status = format!(" image running in container , status = {}", ans_status);
-            service_logs_messages(&service_name, &cont_status , Arc::clone(&app_state));
+            service_logs_messages(&service_name, &cont_status);
 
             Ok(ans_status)
         }
@@ -399,7 +425,7 @@ pub async fn container_status(
                 "image running in conatiner, health check = {:?}",
                 ans_health
             );
-            service_logs_messages(&service_name, &cont_health_status , Arc::clone(&app_state));
+            service_logs_messages(&service_name, &cont_health_status);
 
             return Ok(ans_health);
         }
@@ -458,4 +484,246 @@ pub fn duration_to_nanos(input: &str) -> Result<i64, CliErrors> {
     let duration: Duration =
         parse_duration(input).map_err(|e| CliErrors::new(format!("{}", e.to_string())))?;
     Ok(duration.as_nanos() as i64)
+}
+
+/**
+ *this function will check/find all the conatiners lisned to the network
+ * and restart all the conatiners present in the service vec,
+ * if any service is not present in the container , then we have to build/pull/ start that image in conatiner
+ */
+pub async fn check_and_start_network_containers(
+    docker: &Docker,
+    network_id: &str,
+    service_vec: &Vec<String>,
+    service_map: &HashMap<String, DockerImageDetails>,
+    this_project_labels: &mut HashMap<String, String>,
+    this_project_network: &NetworkingConfig,
+    app_state: Arc<cli_memory>,
+) -> Result<bool, CliErrors> {
+    // hashmap for service_name -> conatiner_id
+    let mut service_to_cont_id_map = HashMap::<String, String>::new();
+
+    println!("hello i am here");
+
+    // if network is valid/exist , the move formward , else
+    match validate_network(docker, network_id).await {
+        Ok(_) => {
+            println!("network already exist , network validation is good for restarting");
+        }
+        Err(incoming_err) => {
+            let expected_mess = format!(
+                "Docker responded with status code 404: network {} not found",
+                network_id
+            );
+
+            // if netwrok doesnt exist , then no issues , we have to start the images in the conatiner
+            // and no restarting
+            if incoming_err.message == expected_mess {
+                println!("no existing network , we need to start conatiners");
+
+                return Ok(false);
+            } else {
+                println!("some other network error {:?}", incoming_err);
+                return Err(incoming_err);
+            }
+        }
+    }
+
+    // list of all conatiners in this network list
+    let network_cont_list = list_all_filter_conatiners(docker, "network", network_id).await?;
+    // validate network
+    // check if existing network has containers , if yes then restart else go back and start in conatiner
+
+    // if this
+    if network_cont_list.len() == 0 {
+        return Ok(false);
+    }
+
+    // loop over container list , finding service name running in that cont and creating map
+    for cont in &network_cont_list {
+        let cont_id = cont
+            .id
+            .clone()
+            .ok_or_else(|| CliErrors::new("unable to extarct conatiner id".to_owned()))?;
+
+        // extracting labels map from conatiner summary
+        let l = cont.labels.clone().ok_or_else(|| {
+            CliErrors::new(format!(
+                "not able to extarct lables from conatiner = {} ",
+                &cont_id
+            ))
+        })?;
+
+        if l.get("com.docker.compose.service").is_some() {
+            let service = l.get("com.docker.compose.service").unwrap();
+
+            service_to_cont_id_map.insert(service.to_owned(), cont_id.to_owned());
+            println!(
+                "this is the service name ={:?} for conatiner = {:?} \n \n",
+                service, &cont_id
+            );
+        } else {
+            return Err(CliErrors::new(
+                "the service name is not present , internal error".to_owned(),
+            ));
+        }
+    }
+    println!(
+        "this is the map of service -> conatiner id {:?}",
+        &service_to_cont_id_map
+    );
+
+    // now looping over service vec , in which we have to restart the containers
+    // ser is present in (ser -> connt) mapping , then we are restarting that cont
+    // if ser is not present , then , it should build/pull/start in the conatiner
+    for s in service_vec {
+        match service_to_cont_id_map.get(s) {
+            Some(c_id) => {
+                let ser_details = service_map.get(s).ok_or_else(|| CliErrors::new("serrive details not present in internal struct , please delete all services and re run up command".to_owned()))?;
+                let ser_name = ser_details.image.clone().unwrap();
+                let health_check_enum = match ser_details.health_check.clone() {
+                    Some(health_polling_details) => {
+                        ContainerInspectType::Health(health_polling_details)
+                    }
+                    None => ContainerInspectType::Status,
+                };
+
+                restart_container(docker, c_id, s, &ser_name, &health_check_enum).await?;
+            }
+            None => {
+                println!("this service is not present in th existing lable {s}");
+                build_or_pull_start_image_in_conatiner(
+                    docker,
+                    s.to_string(),
+                    service_map,
+                    this_project_labels,
+                    this_project_network,
+                    Arc::clone(&app_state),
+                )
+                .await?;
+            }
+        }
+    }
+    Ok(true)
+}
+
+/**
+ *  this function will restat the container
+ */
+pub async fn restart_container(
+    docker: &Docker,
+    c_name: &str,
+    ser_name: &str,
+    image_tag: &str,
+    inspect_type: &ContainerInspectType,
+) -> Result<(), CliErrors> {
+    let c_id = docker
+        .restart_container(c_name, None)
+        .await
+        .map_err(|e| CliErrors::new(e.to_string()))?;
+
+    wait_until_conatiner_running(ser_name.to_owned(), image_tag, docker, c_name, inspect_type)
+        .await?;
+
+    service_started(ser_name, "service restarted".to_owned());
+
+    Ok(())
+}
+
+/**
+ * this will get service name as input and it will check and build/pull/start the image in conatiner
+ */
+pub async fn build_or_pull_start_image_in_conatiner(
+    docker: &Docker,
+    ser: String,
+    service_map: &HashMap<String, DockerImageDetails>,
+    this_project_labels: &mut HashMap<String, String>,
+    this_project_network: &NetworkingConfig,
+    app_state: Arc<cli_memory>,
+) -> Result<(), CliErrors> {
+    let current_image_details = service_map
+        .get(&ser)
+        .ok_or_else(|| CliErrors::new(format!("getting some erro whil extracting {ser}")))?;
+
+    let conatiner_name = current_image_details
+        .container_name
+        .clone()
+        .ok_or_else(|| CliErrors::new(format!("no container name found for service =  {ser}")))?;
+
+    // ports from the service
+    let mut h_p = None;
+    let mut c_p = None;
+    match current_image_details.port.clone() {
+        Some(prts) => {
+            h_p = Some(prts.0);
+            c_p = Some(prts.1);
+        }
+        // ports are none
+        None => {}
+    }
+
+    // constructing heath check details
+    let health_check_enum = match current_image_details.health_check.clone() {
+        Some(health_polling_details) => ContainerInspectType::Health(health_polling_details),
+        None => ContainerInspectType::Status,
+    };
+
+    // starting container , whether it is to be build or start image(local or docker image)
+    match &current_image_details.build {
+        // build can be  (. / folder path)
+        Some(build_file) => {
+            if build_file == "." {
+                build_current_folder_image(
+                    ser.to_string(),
+                    conatiner_name.to_owned(),
+                    &health_check_enum,
+                    h_p.to_owned(),
+                    c_p.to_owned(),
+                    this_project_labels,
+                    &this_project_network,
+                    Arc::clone(&app_state),
+                )
+                .await?;
+            } else {
+                return Err(CliErrors::new(format!(
+                    "currently we are supporting building only current or images present locally or in docker hub"
+                )));
+            }
+        }
+        // if build is none , then image will be there either local image or we will get it from docker
+        None => {
+            // if image is present locally , we will run it directly in the conatiner , else check in docker hub , if present there , pull it and then we will call start image in conatiner
+            let image_name = current_image_details.image.clone().ok_or_else(|| {
+                CliErrors::new(format!("no image name is provided for service => {ser}"))
+            })?;
+
+            let check_local_image = check_image_locally(&docker, &image_name).await?;
+
+            // if not present locally, it must be present in at docker hub , we will check there
+            if !check_local_image {
+                pull_image_locally(
+                    &docker,
+                    ser.to_string(),
+                    image_name.to_owned(),
+                    Arc::clone(&app_state),
+                )
+                .await?;
+            }
+
+            start_image_in_container(
+                &docker,
+                ser.to_string(),
+                image_name.to_owned(),
+                &health_check_enum,
+                h_p.to_owned(),
+                c_p.to_owned(),
+                &this_project_network,
+                this_project_labels,
+                Arc::clone(&app_state),
+            )
+            .await?;
+        }
+    }
+
+    Ok(())
 }

@@ -9,7 +9,7 @@ use crate::{
     cli_memory,
     docker::{
         container_logs::container_logs, container_status::docker_conatiner_status,
-        delete_container::delete_container,
+        delete_container::delete_container, stop_container::stop_container,
     },
     yaml_parser::yaml_parser,
 };
@@ -26,7 +26,8 @@ pub enum CliCommands {
     Up,
     Down,
     Logs,
-    Container_status,
+    ContainerStatus,
+    Stop,
 }
 
 impl fmt::Display for CliName {
@@ -43,7 +44,8 @@ impl FromStr for CliCommands {
             "Up" => Ok(CliCommands::Up),
             "Down" => Ok(CliCommands::Down),
             "Logs" => Ok(CliCommands::Logs),
-            "Container_status" => Ok(CliCommands::Container_status),
+            "ContainerStatus" => Ok(CliCommands::ContainerStatus),
+            "Stop" => Ok(CliCommands::Stop),
             _ => Err(()),
         }
     }
@@ -78,17 +80,26 @@ pub async fn validate_command(
             yaml_parser(&argument, app_state).await.map_err(|e| e)?;
         }
         CliCommands::Down => {
-            println!("this is the down command process");
+            println!(
+                "this is the down command process , to delete all existing conatiners of this network"
+            );
             // here the argument is network
             delete_container(&argument).await.map_err(|e| e)?;
         }
         CliCommands::Logs => {
             println!("this is the logs command proces");
+            // here the argument is conatiner name/id
             container_logs(argument).await?;
         }
-        CliCommands::Container_status => {
+        CliCommands::ContainerStatus => {
             println!("this is the status command process");
+            // here the argument is conatiner id/name
             docker_conatiner_status(argument).await?;
+        }
+        CliCommands::Stop => {
+            println!("this is the stop all conatiners command");
+            // here the argument is network id/name
+            stop_container(&argument).await?;
         }
     }
 

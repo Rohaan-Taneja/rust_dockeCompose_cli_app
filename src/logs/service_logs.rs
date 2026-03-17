@@ -37,7 +37,7 @@ const COLORS: [ServiceColor; 5] = [
     ServiceColor::Magenta,
 ];
 
-pub fn service_logs(service_name: &str, service_log: BuildInfo, app_state: Arc<cli_memory>) {
+pub fn service_logs(service_name: &str, service_log: BuildInfo) {
     let a= String::from("a");
     let b = a.bright_green();
     println!(
@@ -47,7 +47,7 @@ pub fn service_logs(service_name: &str, service_log: BuildInfo, app_state: Arc<c
     );
 }
 
-pub fn service_logs_messages(service_name: &str, service_log: &str, app_state: Arc<cli_memory>) {
+pub fn service_logs_messages(service_name: &str, service_log: &str) {
     println!(
         "{} -> {:?}",
         hash_to_colored_string(service_name),
@@ -55,7 +55,7 @@ pub fn service_logs_messages(service_name: &str, service_log: &str, app_state: A
     );
 }
 
-pub fn service_started(service_name: &str, service_log: String, app_state: Arc<cli_memory>) {
+pub fn service_started(service_name: &str, service_log: String) {
     println!(
         "{} -> {:?}",
         hash_to_colored_string(service_name),
@@ -66,7 +66,6 @@ pub fn service_started(service_name: &str, service_log: String, app_state: Arc<c
 pub fn show_service_error_logs(
     service_name: &str,
     error_message: &str,
-    app_state: Arc<cli_memory>,
 ) {
     println!(
         "{} -> {:?}",
@@ -78,7 +77,6 @@ pub fn show_service_error_logs(
 pub fn show_pulled_image_specific_logs(
     image_name: &str,
     data: CreateImageInfo,
-    app_state: Arc<cli_memory>,
 ) {
     println!("{} -> {:?}", hash_to_colored_string(image_name), data);
 }
@@ -86,7 +84,7 @@ pub fn show_pulled_image_specific_logs(
 /**
  * red delete message
  */
-pub fn service_delete_message(container_id: &str, service_log: &str) {
+pub fn service_stop_or_delete_message(container_id: &str, service_log: &str) {
     println!("{} -> {:?}", container_id.red(), service_log);
 }
 
@@ -113,9 +111,9 @@ pub fn general_error_message(id: &str, message: &str) {
 // auth_Service => 98347234982374
  */
 pub fn hash_to_colored_string(to_be_colored_string: &str) -> String {
-    let mut Hasher = DefaultHasher::new();
-    to_be_colored_string.hash(&mut Hasher);
-    let idx = (Hasher.finish() as usize) % COLORS.len();
+    let mut hasher = DefaultHasher::new();
+    to_be_colored_string.hash(&mut hasher);
+    let idx = (hasher.finish() as usize) % COLORS.len();
 
     let str_color = COLORS[idx];
 

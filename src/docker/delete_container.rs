@@ -6,7 +6,7 @@ use bollard::{
     secret::ContainerSummary,
 };
 
-use crate::{cli_errors::CliErrors, logs::service_logs::{general_message, service_delete_message}};
+use crate::{cli_errors::CliErrors, logs::service_logs::{general_message, service_stop_or_delete_message}};
 
 pub async fn delete_container(network_name: &str) -> Result<bool, CliErrors> {
     let docker =
@@ -21,9 +21,7 @@ pub async fn delete_container(network_name: &str) -> Result<bool, CliErrors> {
         let cont_id = cont
             .id
             .ok_or_else(|| CliErrors::new("cannot find container id".to_string()))?;
-        let image_name = cont
-            .image
-            .ok_or_else(|| CliErrors::new("cannot find container id".to_string()))?;
+
 
         let options = RemoveContainerOptionsBuilder::default().force(true).build();
         docker
@@ -31,8 +29,8 @@ pub async fn delete_container(network_name: &str) -> Result<bool, CliErrors> {
             .await
             .map_err(|e| CliErrors::new(e.to_string()))?;
 
-        let stop_message = format!("current stopped conatiner => {}", cont_id);
-        service_delete_message(&cont_id, &stop_message);
+        let stop_message = format!("current deleted conatiner");
+        service_stop_or_delete_message(&cont_id, &stop_message);
     }
 
 
@@ -50,13 +48,13 @@ pub async fn delete_container(network_name: &str) -> Result<bool, CliErrors> {
 /**
  * if we get specifc netwrok_name => details , it means the network is present , else it will show error
  */
-pub async fn validate_network(docker: &Docker, network_name: &str) -> Result<(), CliErrors> {
+pub async fn validate_network(docker: &Docker, network_name: &str) -> Result<bool, CliErrors> {
     docker
         .inspect_network(network_name, None)
         .await
         .map_err(|e| CliErrors::new(e.to_string()))?;
 
-    Ok(())
+    Ok(true)
 }
 
 /**

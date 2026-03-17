@@ -45,7 +45,7 @@ pub async fn container_logs(cont_name: String) -> Result<bool, CliErrors> {
             }
             // showing error in red , it it occurs
             LogOutput::StdErr { message } => {
-                general_error_message(&cont_name, &String::from_utf8_lossy(&message));
+                println!("{}", String::from_utf8_lossy(&message));
             }
             LogOutput::Console { message } => {
                 print!("{}", String::from_utf8_lossy(&message));

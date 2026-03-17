@@ -4,7 +4,7 @@ use bollard::errors::Error;
 
 #[derive(Debug, Clone)]
 pub struct CliErrors {
-    message: String,
+    pub message: String,
 }
 
 impl CliErrors {
