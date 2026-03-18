@@ -159,46 +159,42 @@ so we connected conatiner_id and services with service name (in conatinersummary
 
 ## 📅 17th march
 integrated restarting of conatiners correctly with th existing yaml parser function ✅
-write stopiing of conatiner function
+write stopiing of conatiner function ✅
+see if we can stop the conatiners (not delete) and then restart them ❓❓ ✅
 
 
-see if we can stop the conatiners (not delete) and then restart them ❓❓
+## 📅 18th march
+remote build via git repo
 
-this_project_network ❓❓ (we are taking network name ad this project name)
+check aise hi running ✅ 
+check with url check
+then after build delete the temp folder ✅ 
+
+this_project_network ❓❓ ✅ (we are taking network name ad this project name)
 <!-- network name is hardcoded , make it dynamic -->
+if network is not provided , docker use default network (current_dir_name + default keyword at the end) , so it is okayy right now
+
 
 
 1) parallel wala thing we will see ❓❓
 
-2) then see how to build when git repo is provided ❓
+2) then see how to build when git repo is provided ❓❓
 
-4) how all. containers are present in 1 group only ❓
+4) how all. containers are present in 1 group only ❓ ✅ ()via labels hashmap , that we add in each container
 
-5) env given ❓
+5) env given ❓❓
 
-6) network dynamic or hardcoded ❓
+6) network dynamic or hardcoded ❓ (taking by default ,  as the project dir name) ✅
 
-7) waiting for a service to start , then next service is starting , status and healthcheck ❓
+7) waiting for a service to start , then next service is starting , status and healthcheck ❓(waiting for the service properly) ✅
 
-8) we are deleteting the containers of down command , can we do stop and restarting ❓
+8) we are deleteting the containers of down command , can we do stop and restarting ❓ ✅ ( down is for delete and stop for stopping all conatiners)
 
-8) health check not added , it is hardcoded , do it ❓
-port is propvided , (but add error handling , see what if same port is given )❓
+8) health check not added , it is hardcoded , do it ❓✅ ( health check enum is added as input in the function )
 
-9) improve dockerfile of the project , it should not download crated on evry image run , it should reuse them and boot up fast 
+9) improve dockerfile of the project , it should not download crated on evry image run , it should reuse them and boot up fast ❓
 
-10) handle ctrl + c command 
+10) handle ctrl + c command ❓❓
 
+11) clap ka use properly we are using enum way , see what can be imporved in that ❓❓
 
-
-
-
-
-
-
-currently we are only supporting current folder build = . and not folder path
-for image , we are supporting local image build and pull from docker and the build ❓
-
-
-
-for other we wil take contianer file 3) logs , status , stop , input will be container_id

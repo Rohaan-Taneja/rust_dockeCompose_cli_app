@@ -5,7 +5,7 @@ use std::{
   
 };
 
-use crate::{cli_errors::CliErrors, docker::service_sort::sort_services, yaml_parser::{FilePathType, file_name}};
+use crate::{cli_errors::CliErrors, utils::service_sort::sort_services, yaml_parser::{FilePathType, file_name}};
 use indexmap::IndexMap;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -89,12 +89,18 @@ pub fn add_service_to_service_map(
 
     // projectName_service_name
     if image_name.is_none() {
+
+       
         image_name = Some(format!("{}_{}", file_name, service_name));
+        
     }
 
     // if conatiner name is not specifed , and image and build is bot specified , hen image name is the container name
     if container_name.is_none() {
+       
         container_name = Some(format!("{}_{}_1", file_name, service_name));
+
+      
     }
 
     let healthcheck_data = compose_service_data.healthcheck;

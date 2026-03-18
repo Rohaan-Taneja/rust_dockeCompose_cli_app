@@ -16,16 +16,14 @@ use docker_compose_types::{Compose, Healthcheck};
 use crate::{
     cli_errors::CliErrors,
     cli_memory,
-    docker::{
-        compose_parser::{self, DockerImageDetails, construct_docker_image_details_map},
-        start_images_in_container::{
-            build_current_folder_image, build_or_pull_start_image_in_conatiner,
-            check_and_start_network_containers, check_image_locally, pull_image_locally,
-            start_image_in_container,
-        },
-    },
+    docker::start_images_in_container::{
+           build_or_pull_and_start_image_in_conatiner,
+            check_and_start_network_containers,
+        }, utils::compose_parser::{DockerImageDetails, construct_docker_image_details_map},
 };
 
+
+// the docker-compose file can be of this name only , else its an error
 pub const FILE_NAMES: [&str; 6] = [
     "compose.yaml",
     "compose.yml",
@@ -35,6 +33,7 @@ pub const FILE_NAMES: [&str; 6] = [
     "docker-compose.override.yml",
 ];
 
+// used to extract dir name from path
 pub enum FilePathType {
     CurrentDir,
     FilePath,
@@ -91,7 +90,7 @@ pub async fn yaml_parser(
     )
     .await?;
 
-    // if ans == false it measn (either no network for this project is present ot conatiners are not present)
+    // if ans == false it measn (either no network for this project is present ot containers are not present)
     // starting images in conatiner , if they are not present in existing conatiners
     // if network is not present or network has 0 conatiners ,
     // if more that 1  , then we will restart(the existing containers) + build/pull( whose containers are not present)
@@ -103,7 +102,9 @@ pub async fn yaml_parser(
         // loop over service , and start the images in conatiner 1 by 1
         // if build = . , build current folder , if image name , then pull/build image accordingly
         for ser in service_vec {
-            build_or_pull_start_image_in_conatiner(
+
+            // build/pull the image and start it in a container
+            build_or_pull_and_start_image_in_conatiner(
                 &docker,
                 ser,
                 &service_map,
@@ -127,7 +128,7 @@ pub fn validate_file_path(
     i_file_path: &str,
 ) -> Result<
     (
-        HashMap<String, compose_parser::DockerImageDetails>,
+        HashMap<String, DockerImageDetails>,
         Vec<String>,
     ),
     CliErrors,

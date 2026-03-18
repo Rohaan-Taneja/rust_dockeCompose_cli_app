@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use bollard::{
     Docker,
     query_parameters::{StopContainerOptions},
@@ -31,8 +29,7 @@ pub async fn stop_container(network_name: &str) -> Result<bool, CliErrors> {
             .await
             .map_err(|e| CliErrors::new(e.to_string()))?;
 
-        let stop_message = format!("current stopped conatiner" );
-        service_stop_or_delete_message(&cont_id, &stop_message);
+        service_stop_or_delete_message(&cont_id, "conatiner stopped");
     }
 
     general_message(&network_name, "stopped all conatiners in the network");

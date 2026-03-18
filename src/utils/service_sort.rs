@@ -4,8 +4,7 @@ use docker_compose_types::{DependsCondition, DependsOnOptions, Service};
 use indexmap::IndexMap;
 
 use crate::{
-    cli_errors::CliErrors,
-    docker::compose_parser::{DockerImageDetails, add_service_to_service_map},
+    cli_errors::CliErrors, utils::compose_parser::{DockerImageDetails, add_service_to_service_map},
 };
 
 /**

@@ -57,3 +57,9 @@ services:
     depends_on:
       db-4:
         condition: service_healthy
+
+  db-7:
+    build: https://github.com/Rohaan-Taneja/rust_dockeCompose_cli_app
+
+    ports:
+      - "8086:8080"

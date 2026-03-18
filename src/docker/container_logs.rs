@@ -20,8 +20,6 @@ pub async fn container_logs(cont_name: String) -> Result<bool, CliErrors> {
     let docker =
         Docker::connect_with_local_defaults().map_err(|e| CliErrors::new(e.to_string()))?;
 
-    let options = LogsOptionsBuilder::default().stdout(true).build();
-
     let opt = LogsOptions {
         follow: false,
         stdout: true,

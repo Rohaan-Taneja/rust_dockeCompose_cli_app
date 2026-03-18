@@ -16,6 +16,7 @@ pub mod docker;
 
 pub mod logs;
 pub mod yaml_parser;
+pub mod utils;
 
 /**
  * argument can a file_path/network_name

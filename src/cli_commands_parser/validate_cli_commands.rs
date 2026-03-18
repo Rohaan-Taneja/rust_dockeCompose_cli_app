@@ -8,8 +8,7 @@ use crate::{
     cli_errors::CliErrors,
     cli_memory,
     docker::{
-        container_logs::container_logs, container_status::docker_conatiner_status,
-        delete_container::delete_container, stop_container::stop_container,
+        container_logs::container_logs, container_status::docker_conatiner_status, delete_container::delete_container, start_images_in_container::build_remote_git_repo, stop_container::stop_container
     },
     yaml_parser::yaml_parser,
 };
@@ -90,6 +89,7 @@ pub async fn validate_command(
             println!("this is the logs command proces");
             // here the argument is conatiner name/id
             container_logs(argument).await?;
+
         }
         CliCommands::ContainerStatus => {
             println!("this is the status command process");

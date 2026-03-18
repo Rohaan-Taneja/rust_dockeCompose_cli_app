@@ -12,27 +12,25 @@ use bollard::{
 
 use bytes::Bytes;
 use docker_compose_types::{Healthcheck, HealthcheckTest};
+use git2::Repository;
 use http_body_util::StreamBody;
 use humantime::parse_duration;
 use hyper::body::Frame;
+use std::fs;
 use std::sync::Arc;
-use std::{
-    collections::HashMap,
-    pin::Pin,
-    thread::sleep,
-    time::{self, Duration},
-    vec,
-};
+use std::{collections::HashMap, pin::Pin, thread::sleep, time::Duration, vec};
 use tokio::process::Command;
 use tokio_util::io::ReaderStream;
 
 use crate::cli_memory;
-use crate::docker::compose_parser::DockerImageDetails;
 use crate::docker::delete_container::{list_all_filter_conatiners, validate_network};
 use crate::logs::service_logs::{
     service_logs, service_logs_messages, service_started, show_pulled_image_specific_logs,
     show_service_error_logs,
 };
+use crate::utils::check_is_git_repo_url::check_is_git_repo_url;
+use crate::utils::compose_parser::DockerImageDetails;
+use crate::utils::delete_network::delete_network;
 use crate::{cli_errors::CliErrors, yaml_parser::ContainerInspectType};
 
 use futures_util::{Stream, StreamExt};
@@ -43,6 +41,7 @@ use futures_util::{Stream, StreamExt};
  */
 pub async fn build_current_folder_image(
     service_name: String,
+    container_name : &str,
     image_tag: String,
     inspect_type: &ContainerInspectType,
     host_port: Option<String>,
@@ -64,7 +63,7 @@ pub async fn build_current_folder_image(
 
     // geting the tar stream of this folder/project , if service is (build : .)
     // let body = convert_to_tar_archive().await.map_err(|e| e)?;
-    let body = convert_current_folder_to_tar_stream().map_err(|e| e)?;
+    let body = convert_to_tar_stream(Some(".")).map_err(|e| e)?;
 
     let mut image_build_stream = docker.build_image(
         build_image_options.build(),
@@ -90,6 +89,7 @@ pub async fn build_current_folder_image(
 
     start_image_in_container(
         &docker,
+        container_name,
         service_name,
         to_be_built_image_tag,
         inspect_type,
@@ -137,10 +137,7 @@ pub async fn pull_image_locally(
         }
     }
 
-    service_logs_messages(
-        &service_name,
-        "image pulled successfully",
-    );
+    service_logs_messages(&service_name, "image pulled successfully");
     Ok(true)
 }
 
@@ -173,7 +170,7 @@ pub async fn check_image_locally(docker: &Docker, image_tag_name: &str) -> Resul
  * tar file chunks loads 1 by 1 in memory and send to docker api
  * so no big file converted to tar loaded in meory , no meory spikes , chunk by chunk approach is better that converting and loading all project in temp memory at once
  */
-fn convert_current_folder_to_tar_stream() -> Result<
+pub fn convert_current_folder_to_tar_stream() -> Result<
     StreamBody<Pin<Box<dyn Stream<Item = Result<Frame<Bytes>, std::io::Error>> + Send>>>,
     CliErrors,
 > {
@@ -192,9 +189,52 @@ fn convert_current_folder_to_tar_stream() -> Result<
         .map_err(|e| CliErrors::new(e.to_string()))?;
 
     // some tar it got , it recievs it and it is treamed via readerstream
-    let stdout = child.stdout.take().unwrap();
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| CliErrors::new("Failed to capture tar stdout".to_string()))?;
 
     // it reads the small chunks and emit them out
+    let stream = ReaderStream::new(stdout).map(|result| result.map(Frame::data));
+
+    Ok(StreamBody::new(Box::pin(stream)))
+}
+
+pub fn convert_to_tar_stream(
+    path: Option<&str>,
+) -> Result<
+    StreamBody<Pin<Box<dyn Stream<Item = Result<Frame<Bytes>, std::io::Error>> + Send>>>,
+    CliErrors,
+> {
+    let mut cmd = Command::new("tar");
+
+    cmd.arg("--exclude=target")
+        .arg("--exclude=.git")
+        .arg("--no-xattrs")
+        .arg("--no-acls")
+        .arg("--no-fflags")
+        .arg("-cf")
+        .arg("-");
+
+    // If path is provided → use it
+    // Otherwise → use current directory
+    if let Some(p) = path {
+        cmd.arg("-C").arg(p).arg(".");
+    } else {
+        cmd.arg(".");
+    }
+
+    let mut child = cmd
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::inherit())
+        .spawn()
+        .map_err(|e| CliErrors::new(e.to_string()))?;
+
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| CliErrors::new("Failed to capture tar stdout".to_string()))?;
+
     let stream = ReaderStream::new(stdout).map(|result| result.map(Frame::data));
 
     Ok(StreamBody::new(Box::pin(stream)))
@@ -206,6 +246,7 @@ fn convert_current_folder_to_tar_stream() -> Result<
  */
 pub async fn start_image_in_container(
     docker: &Docker,
+    container_name : &str ,
     service_name: String,
     image_tag: String,
     inspect_type: &ContainerInspectType,
@@ -215,10 +256,7 @@ pub async fn start_image_in_container(
     labels: &mut HashMap<String, String>,
     app_state: Arc<cli_memory>,
 ) -> Result<bool, CliErrors> {
-    service_logs_messages(
-        &service_name,
-        "starting image in conatiner",
-    );
+    service_logs_messages(&service_name, "starting image in conatiner");
 
     // by default , no ports
     // if prots assigned , we will change these configs and give it to the struct below
@@ -262,10 +300,15 @@ pub async fn start_image_in_container(
         service_name.to_owned(),
     );
 
+    let cont_optins = CreateContainerOptions{
+        name : Some(container_name.to_owned()),
+        ..Default::default()
+    };
+
     // Create container and docker port binding with local computer ip and port
     let container_id = docker
         .create_container(
-            Some(CreateContainerOptions::default()),
+            Some(cont_optins),
             ContainerCreateBody {
                 image: Some(image_tag.to_string()),
                 exposed_ports: exposed_ports, // conatiner port
@@ -508,7 +551,7 @@ pub async fn check_and_start_network_containers(
     // if network is valid/exist , the move formward , else
     match validate_network(docker, network_id).await {
         Ok(_) => {
-            println!("network already exist , network validation is good for restarting");
+            // if netwrok is there , then we have restart the existing network conatiners
         }
         Err(incoming_err) => {
             let expected_mess = format!(
@@ -534,17 +577,20 @@ pub async fn check_and_start_network_containers(
     // validate network
     // check if existing network has containers , if yes then restart else go back and start in conatiner
 
-    // if this
+    // if no conatiners in network ,return false and start new images in conatiners
     if network_cont_list.len() == 0 {
+        // deleting existing network with no conatiners and returning , so as to create new network and start con in it 
+        delete_network(docker, network_id).await?;
         return Ok(false);
     }
 
     // loop over container list , finding service name running in that cont and creating map
     for cont in &network_cont_list {
+
         let cont_id = cont
             .id
             .clone()
-            .ok_or_else(|| CliErrors::new("unable to extarct conatiner id".to_owned()))?;
+            .ok_or_else(|| CliErrors::new("unable to extract conatiner id".to_owned()))?;
 
         // extracting labels map from conatiner summary
         let l = cont.labels.clone().ok_or_else(|| {
@@ -569,7 +615,7 @@ pub async fn check_and_start_network_containers(
         }
     }
     println!(
-        "this is the map of service -> conatiner id {:?}",
+        "this is the map of service -> container id {:?}",
         &service_to_cont_id_map
     );
 
@@ -592,7 +638,7 @@ pub async fn check_and_start_network_containers(
             }
             None => {
                 println!("this service is not present in th existing lable {s}");
-                build_or_pull_start_image_in_conatiner(
+                build_or_pull_and_start_image_in_conatiner(
                     docker,
                     s.to_string(),
                     service_map,
@@ -608,7 +654,7 @@ pub async fn check_and_start_network_containers(
 }
 
 /**
- *  this function will restat the container
+ *  this function will restart the container
  */
 pub async fn restart_container(
     docker: &Docker,
@@ -633,7 +679,7 @@ pub async fn restart_container(
 /**
  * this will get service name as input and it will check and build/pull/start the image in conatiner
  */
-pub async fn build_or_pull_start_image_in_conatiner(
+pub async fn build_or_pull_and_start_image_in_conatiner(
     docker: &Docker,
     ser: String,
     service_map: &HashMap<String, DockerImageDetails>,
@@ -645,7 +691,7 @@ pub async fn build_or_pull_start_image_in_conatiner(
         .get(&ser)
         .ok_or_else(|| CliErrors::new(format!("getting some erro whil extracting {ser}")))?;
 
-    let conatiner_name = current_image_details
+    let container_name = current_image_details
         .container_name
         .clone()
         .ok_or_else(|| CliErrors::new(format!("no container name found for service =  {ser}")))?;
@@ -662,11 +708,14 @@ pub async fn build_or_pull_start_image_in_conatiner(
         None => {}
     }
 
+    let image_name = current_image_details.image.clone().ok_or_else(|| CliErrors::new(format!("no image name fount for service {}" , &ser)))?;
+
     // constructing heath check details
     let health_check_enum = match current_image_details.health_check.clone() {
         Some(health_polling_details) => ContainerInspectType::Health(health_polling_details),
         None => ContainerInspectType::Status,
     };
+
 
     // starting container , whether it is to be build or start image(local or docker image)
     match &current_image_details.build {
@@ -675,7 +724,27 @@ pub async fn build_or_pull_start_image_in_conatiner(
             if build_file == "." {
                 build_current_folder_image(
                     ser.to_string(),
-                    conatiner_name.to_owned(),
+                    &container_name ,
+                    image_name.to_owned(),
+                    &health_check_enum,
+                    h_p.to_owned(),
+                    c_p.to_owned(),
+                    this_project_labels,
+                    &this_project_network,
+                    Arc::clone(&app_state),
+                )
+                .await?;
+            }
+            // if its a url
+            // if its a git repo url
+            // then call repofunction
+            else if check_is_git_repo_url(build_file)? {
+
+                build_remote_git_repo(
+                    &build_file,
+                    &container_name ,
+                    ser.to_string(),
+                    image_name.to_owned(),
                     &health_check_enum,
                     h_p.to_owned(),
                     c_p.to_owned(),
@@ -686,7 +755,7 @@ pub async fn build_or_pull_start_image_in_conatiner(
                 .await?;
             } else {
                 return Err(CliErrors::new(format!(
-                    "currently we are supporting building only current or images present locally or in docker hub"
+                    "currently we are supporting building only current dir and public git repo and images present locally or in docker hub"
                 )));
             }
         }
@@ -712,6 +781,7 @@ pub async fn build_or_pull_start_image_in_conatiner(
 
             start_image_in_container(
                 &docker,
+                &container_name ,
                 ser.to_string(),
                 image_name.to_owned(),
                 &health_check_enum,
@@ -726,4 +796,81 @@ pub async fn build_or_pull_start_image_in_conatiner(
     }
 
     Ok(())
+}
+
+/**
+ * this functill clone provided git repo and build it and send tar stream ,to crete image of it
+ * then that image will be started in the conatiner
+ * then we will delete the temp folder creaated(in which the git repo is cloned)
+ */
+pub async fn build_remote_git_repo(
+    git_repo_url: &str,
+    container_name : &str,
+    service_name: String,
+    image_tag: String,
+    inspect_type: &ContainerInspectType,
+    host_port: Option<String>,
+    cont_port: Option<String>,
+    this_project_labels: &mut HashMap<String, String>,
+    this_project_network: &NetworkingConfig,
+    app_state: Arc<cli_memory>,
+) -> Result<bool, CliErrors> {
+    let temp_path = "./temp/git_pull";
+
+    let docker =
+        Docker::connect_with_local_defaults().map_err(|e| CliErrors::new(e.to_string()))?;
+    let r =
+        Repository::clone(git_repo_url, temp_path).map_err(|e| CliErrors::new(e.to_string()))?;
+
+    service_logs_messages(&service_name, "sucessfully pulled the remote git repo");
+
+    let build_image_options = bollard::query_parameters::BuildImageOptionsBuilder::default()
+        .dockerfile("Dockerfile")
+        .t(&image_tag)
+        .pull("true");
+
+    let body = convert_to_tar_stream(Some(temp_path))?;
+
+    let mut image_build_stream = docker.build_image(
+        build_image_options.build(),
+        None,
+        Some(http_body_util::Either::Right(body)),
+    );
+
+    service_logs_messages(&service_name, "streaming tar archive to docker for building image");
+
+    while let Some(msg) = image_build_stream.next().await {
+        match msg {
+            Ok(msg) => {
+                service_logs(&service_name, msg);
+            }
+            Err(e) => {
+                 let error_message = format!(
+                    "error while building the current folder image {} => {}",
+                    image_tag,
+                    e.to_string()
+                );
+                show_service_error_logs(&service_name, &error_message);
+            }
+        }
+    }
+
+    start_image_in_container(
+        &docker,
+        container_name ,
+        service_name,
+        image_tag,
+        inspect_type,
+        host_port.to_owned(),
+        cont_port.to_owned(),
+        &this_project_network,
+        this_project_labels,
+        Arc::clone(&app_state),
+    )
+    .await?;
+
+    // deleteing the temp folder created for temp build
+    fs::remove_dir_all("./temp").map_err(|e| CliErrors::new(e.to_string()))?;
+
+    Ok(true)
 }

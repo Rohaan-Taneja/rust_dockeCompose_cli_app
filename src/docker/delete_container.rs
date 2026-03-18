@@ -6,7 +6,7 @@ use bollard::{
     secret::ContainerSummary,
 };
 
-use crate::{cli_errors::CliErrors, logs::service_logs::{general_message, service_stop_or_delete_message}};
+use crate::{cli_errors::CliErrors, logs::service_logs::{general_message, service_stop_or_delete_message}, utils::delete_network::delete_network};
 
 pub async fn delete_container(network_name: &str) -> Result<bool, CliErrors> {
     let docker =
@@ -35,15 +35,14 @@ pub async fn delete_container(network_name: &str) -> Result<bool, CliErrors> {
 
 
     // removing the network after deleting all the containers
-    docker
-        .remove_network(network_name)
-        .await
-        .map_err(|e| CliErrors::new(e.to_string()))?;
-    
-    general_message(&network_name, "Deleted network and disconnected all associated containers");
+    delete_network(&docker, network_name).await?;
+
 
     Ok(true)
 }
+
+
+
 
 /**
  * if we get specifc netwrok_name => details , it means the network is present , else it will show error
