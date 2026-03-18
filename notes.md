@@ -164,25 +164,38 @@ see if we can stop the conatiners (not delete) and then restart them ❓❓ ✅
 
 
 ## 📅 18th march
-remote build via git repo
+remote build via git repo  ✅
 
 check aise hi running ✅ 
-check with url check
+check with url check  ✅
 then after build delete the temp folder ✅ 
+
+
+
 
 this_project_network ❓❓ ✅ (we are taking network name ad this project name)
 <!-- network name is hardcoded , make it dynamic -->
-if network is not provided , docker use default network (current_dir_name + default keyword at the end) , so it is okayy right now
+in docker => if network is not provided , docker use default network (current_dir_name + default keyword at the end) , so it is okayy right now
 
 
-
+<!-- todo -->
 1) parallel wala thing we will see ❓❓
 
-2) then see how to build when git repo is provided ❓❓
+9) improve dockerfile of the project , it should not download crated on evry image run , it should reuse them and boot up fast ❓
 
-4) how all. containers are present in 1 group only ❓ ✅ ()via labels hashmap , that we add in each container
+10) handle ctrl + c command ❓❓
 
 5) env given ❓❓
+
+11) clap ka use properly we are using enum way , see what can be imporved in that ❓❓
+
+
+
+
+<!-- done -->
+2) then see how to build when git repo is provided ❓❓ ✅ 
+
+4) how all. containers are present in 1 group only ❓ ✅ ()via labels hashmap , that we add in each container (by default docker take label.project as current dir name)
 
 6) network dynamic or hardcoded ❓ (taking by default ,  as the project dir name) ✅
 
@@ -191,10 +204,3 @@ if network is not provided , docker use default network (current_dir_name + defa
 8) we are deleteting the containers of down command , can we do stop and restarting ❓ ✅ ( down is for delete and stop for stopping all conatiners)
 
 8) health check not added , it is hardcoded , do it ❓✅ ( health check enum is added as input in the function )
-
-9) improve dockerfile of the project , it should not download crated on evry image run , it should reuse them and boot up fast ❓
-
-10) handle ctrl + c command ❓❓
-
-11) clap ka use properly we are using enum way , see what can be imporved in that ❓❓
-

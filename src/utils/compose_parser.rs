@@ -71,11 +71,13 @@ pub fn add_service_to_service_map(
         .clone()
         .ok_or_else(|| CliErrors::cannot_extract_service_details_from_docker_compose())?;
 
+    // println!("this is the service {} , details {:?}" , service_name , compose_service_data);
     // parsing build folder name from it
     let build_folder = match compose_service_data.build_ {
         Some(BuildStep::Simple(build_path)) => Some(build_path),
-        Some(BuildStep::Advanced(_)) => {
-            return Err(CliErrors::not_supported_build_type(&service_name));
+        Some(BuildStep::Advanced(data)) => {
+            Some(data.context)
+            
         }
         None => None,
     };

@@ -59,7 +59,8 @@ services:
         condition: service_healthy
 
   db-7:
-    build: https://github.com/Rohaan-Taneja/rust_dockeCompose_cli_app
+    build:
+      context:  https://github.com/Rohaan-Taneja/rust_dockeCompose_cli_app.git
 
     ports:
       - "8086:8080"

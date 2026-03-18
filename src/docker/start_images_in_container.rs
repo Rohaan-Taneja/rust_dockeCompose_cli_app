@@ -716,6 +716,8 @@ pub async fn build_or_pull_and_start_image_in_conatiner(
         None => ContainerInspectType::Status,
     };
 
+    println!("this service map detais {:?}" , current_image_details);
+
 
     // starting container , whether it is to be build or start image(local or docker image)
     match &current_image_details.build {
