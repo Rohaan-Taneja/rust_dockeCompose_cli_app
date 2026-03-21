@@ -1,7 +1,7 @@
 services:
 
   db-1:
-    image: rust_backendd_2:latest
+    image: rust_auth_img:latest
 
     ports:
       - "8080:8080"
@@ -10,7 +10,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 3
-      start_period: 15s
+      start_period: 2s
 
   db-5:
     image: nginx:latest
@@ -37,7 +37,7 @@ services:
       - db-2
 
   db-4:
-    image: rust_backendd_2:latest
+    image: rust_auth_img:latest
 
     ports:
       - "8083:8080"

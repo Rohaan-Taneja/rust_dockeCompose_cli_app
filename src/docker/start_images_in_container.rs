@@ -25,8 +25,8 @@ use tokio_util::io::ReaderStream;
 use crate::cli_memory;
 use crate::docker::delete_container::{list_all_filter_conatiners, validate_network};
 use crate::logs::service_logs::{
-    service_logs, service_logs_messages, service_started, show_pulled_image_specific_logs,
-    show_service_error_logs,
+    general_error_message, service_logs, service_logs_messages, service_started,
+    show_pulled_image_specific_logs, show_service_error_logs,
 };
 use crate::utils::check_is_git_repo_url::check_is_git_repo_url;
 use crate::utils::compose_parser::DockerImageDetails;
@@ -41,7 +41,7 @@ use futures_util::{Stream, StreamExt};
  */
 pub async fn build_current_folder_image(
     service_name: String,
-    container_name : &str,
+    container_name: &str,
     image_tag: String,
     inspect_type: &ContainerInspectType,
     host_port: Option<String>,
@@ -246,7 +246,7 @@ pub fn convert_to_tar_stream(
  */
 pub async fn start_image_in_container(
     docker: &Docker,
-    container_name : &str ,
+    container_name: &str,
     service_name: String,
     image_tag: String,
     inspect_type: &ContainerInspectType,
@@ -300,8 +300,8 @@ pub async fn start_image_in_container(
         service_name.to_owned(),
     );
 
-    let cont_optins = CreateContainerOptions{
-        name : Some(container_name.to_owned()),
+    let cont_optins = CreateContainerOptions {
+        name: Some(container_name.to_owned()),
         ..Default::default()
     };
 
@@ -414,6 +414,10 @@ pub async fn container_status(
     container_id: &str,
     inspect_type: &ContainerInspectType,
 ) -> Result<String, CliErrors> {
+    // when we are polling the container , where we are telling that we have to pol this url
+    // see that , understand that
+
+    // println!("this is the inspect type {:?}", inspect_type);
     // polling and getting conatiner status
     let container_inspect_response = docker
         .inspect_container(
@@ -433,6 +437,10 @@ pub async fn container_status(
         })?
         .state
         .ok_or_else(|| CliErrors::new("getting none while inspecting the conatiner".to_string()))?;
+
+    // let ans = container_inspect_response.health
+
+    // println!("this is the inspect respo {:?}" );
 
     // match inspect type , whetehr we want to check just running conatiner
     // or check if the service is healthy/running or not
@@ -455,14 +463,36 @@ pub async fn container_status(
             Ok(ans_status)
         }
         ContainerInspectType::Health(polling_details) => {
-            let ans_health = container_inspect_response
-                .health
-                .ok_or_else(|| CliErrors::new("getting error in heath check".to_string()))?
-                .status
-                .ok_or_else(|| {
-                    CliErrors::new(String::from("GETTING ERROR IN HEALTH CHECK STATUS"))
-                })?
-                .to_string();
+            let ans_health = match container_inspect_response.health {
+                Some(health_status) => {
+
+                    // printing logs of health of the service
+                    match health_status.log {
+                        Some(log_vec) => {
+                            for h_c in log_vec {
+                                let output = format!( " \n \n {} \n \n" ,h_c.output.unwrap_or("none".to_owned()) );
+                                general_error_message(&service_name, &output);
+                            }
+                        }
+                        // if health logs , so we dont want to anything
+                        None => {}
+                    };
+
+                    // returning health check status enum value (healthy , unhealthy etc)
+                    health_status
+                        .status
+                        .ok_or_else(|| {
+                            CliErrors::new(String::from("GETTING ERROR IN HEALTH CHECK STATUS"))
+                        })?
+                        .to_string()
+                }
+                None => {
+                    return Err(CliErrors::new(format!(
+                        "the health status of {} is coming out none, please add health check details to service",
+                        { service_name }
+                    )));
+                }
+            };
 
             let cont_health_status = format!(
                 "image running in conatiner, health check = {:?}",
@@ -579,14 +609,13 @@ pub async fn check_and_start_network_containers(
 
     // if no conatiners in network ,return false and start new images in conatiners
     if network_cont_list.len() == 0 {
-        // deleting existing network with no conatiners and returning , so as to create new network and start con in it 
+        // deleting existing network with no conatiners and returning , so as to create new network and start con in it
         delete_network(docker, network_id).await?;
         return Ok(false);
     }
 
     // loop over container list , finding service name running in that cont and creating map
     for cont in &network_cont_list {
-
         let cont_id = cont
             .id
             .clone()
@@ -708,16 +737,16 @@ pub async fn build_or_pull_and_start_image_in_conatiner(
         None => {}
     }
 
-    let image_name = current_image_details.image.clone().ok_or_else(|| CliErrors::new(format!("no image name fount for service {}" , &ser)))?;
+    let image_name = current_image_details
+        .image
+        .clone()
+        .ok_or_else(|| CliErrors::new(format!("no image name fount for service {}", &ser)))?;
 
     // constructing heath check details
     let health_check_enum = match current_image_details.health_check.clone() {
         Some(health_polling_details) => ContainerInspectType::Health(health_polling_details),
         None => ContainerInspectType::Status,
     };
-
-    println!("this service map detais {:?}" , current_image_details);
-
 
     // starting container , whether it is to be build or start image(local or docker image)
     match &current_image_details.build {
@@ -726,7 +755,7 @@ pub async fn build_or_pull_and_start_image_in_conatiner(
             if build_file == "." {
                 build_current_folder_image(
                     ser.to_string(),
-                    &container_name ,
+                    &container_name,
                     image_name.to_owned(),
                     &health_check_enum,
                     h_p.to_owned(),
@@ -741,10 +770,9 @@ pub async fn build_or_pull_and_start_image_in_conatiner(
             // if its a git repo url
             // then call repofunction
             else if check_is_git_repo_url(build_file)? {
-
                 build_remote_git_repo(
                     &build_file,
-                    &container_name ,
+                    &container_name,
                     ser.to_string(),
                     image_name.to_owned(),
                     &health_check_enum,
@@ -781,9 +809,15 @@ pub async fn build_or_pull_and_start_image_in_conatiner(
                 .await?;
             }
 
+            println!(
+                "image = {} , details {:?}",
+                image_name,
+                service_map.get(&ser)
+            );
+
             start_image_in_container(
                 &docker,
-                &container_name ,
+                &container_name,
                 ser.to_string(),
                 image_name.to_owned(),
                 &health_check_enum,
@@ -807,7 +841,7 @@ pub async fn build_or_pull_and_start_image_in_conatiner(
  */
 pub async fn build_remote_git_repo(
     git_repo_url: &str,
-    container_name : &str,
+    container_name: &str,
     service_name: String,
     image_tag: String,
     inspect_type: &ContainerInspectType,
@@ -839,7 +873,10 @@ pub async fn build_remote_git_repo(
         Some(http_body_util::Either::Right(body)),
     );
 
-    service_logs_messages(&service_name, "streaming tar archive to docker for building image");
+    service_logs_messages(
+        &service_name,
+        "streaming tar archive to docker for building image",
+    );
 
     while let Some(msg) = image_build_stream.next().await {
         match msg {
@@ -847,7 +884,7 @@ pub async fn build_remote_git_repo(
                 service_logs(&service_name, msg);
             }
             Err(e) => {
-                 let error_message = format!(
+                let error_message = format!(
                     "error while building the current folder image {} => {}",
                     image_tag,
                     e.to_string()
@@ -857,9 +894,10 @@ pub async fn build_remote_git_repo(
         }
     }
 
+    println!("i came here");
     start_image_in_container(
         &docker,
-        container_name ,
+        container_name,
         service_name,
         image_tag,
         inspect_type,
@@ -873,6 +911,8 @@ pub async fn build_remote_git_repo(
 
     // deleteing the temp folder created for temp build
     fs::remove_dir_all("./temp").map_err(|e| CliErrors::new(e.to_string()))?;
+
+
 
     Ok(true)
 }

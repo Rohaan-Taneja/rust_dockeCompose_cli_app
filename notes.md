@@ -173,23 +173,41 @@ then after build delete the temp folder ✅
 
 
 
+
+## 📅 19th march
+updated dockerfile  ✅
+learnt abour docker build in stages  ✅
+
+## 📅 20th march
+did not do anything , office procrastination
+
+## 📅 21st march
+resolved the docker build stages bug (if using curl , add that as dependecy in the project)  ✅
+added errror displaying part in health check , if we get any error , not just pollling and showing unhealthy , let user know whast the issue  ✅
+
+<!-- todo -->
+9) improve dockerfile of the project , it should not download crated on evry image run , it should reuse them and boot up fast ❓ (thu). , did on thu and sat(debugging) ✅
+
+
+
+
+
 this_project_network ❓❓ ✅ (we are taking network name ad this project name)
 <!-- network name is hardcoded , make it dynamic -->
 in docker => if network is not provided , docker use default network (current_dir_name + default keyword at the end) , so it is okayy right now
 
 
-<!-- todo -->
-1) parallel wala thing we will see ❓❓
-
-9) improve dockerfile of the project , it should not download crated on evry image run , it should reuse them and boot up fast ❓
-
-10) handle ctrl + c command ❓❓
-
-5) env given ❓❓
-
-11) clap ka use properly we are using enum way , see what can be imporved in that ❓❓
 
 
+10) handle ctrl + c command ❓❓ (thu)
+
+5) env given ❓❓ (fri)
+
+11) clap ka use properly we are using enum way , see what can be imporved in that ❓❓(fri)
+
+12) make it a cli app and publish and test it locally (sat sun)
+
+13) show error in by asking ai , explain the error here in cli only
 
 
 <!-- done -->

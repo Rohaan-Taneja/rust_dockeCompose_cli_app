@@ -44,6 +44,7 @@ pub enum FilePathType {
  * status =>just to check if the conatiner is running or not
  * health => or to chec is conatiner service has stated or not
  */
+#[derive(Debug)]
 pub enum ContainerInspectType {
     Status,
     Health(Healthcheck),
