@@ -2,7 +2,7 @@
 
 set -e
 
-REPO="YOUR_USERNAME/dockyard"
+REPO="Rohaan-Taneja/rust_dockeCompose_cli_app"
 BINARY="dockyard"
 
 echo "Installing dockyard..."
