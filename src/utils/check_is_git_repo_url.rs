@@ -16,8 +16,8 @@ pub fn check_is_git_repo_url(url: &str) -> Result<bool, CliErrors> {
         .output()
         .map_err(|e| {
             CliErrors::new(format!(
-                "getting error while checing git repo link in docker compuse {:?}",
-                e
+                "getting error while checing git repo link in docker compose {:?}",
+                e.to_string()
             ))
         })?;
 

@@ -1,6 +1,5 @@
 use bollard::{
-    Docker,
-    secret::{EndpointSettings, NetworkCreateRequest, NetworkingConfig},
+    Docker, network, secret::{EndpointSettings, NetworkCreateRequest, NetworkingConfig}
 };
 
 use std::{
@@ -14,14 +13,14 @@ use std::{
 use docker_compose_types::{Compose, Healthcheck};
 
 use crate::{
+    CliMemory,
     cli_errors::CliErrors,
-    cli_memory,
     docker::start_images_in_container::{
-           build_or_pull_and_start_image_in_conatiner,
-            check_and_start_network_containers,
-        }, utils::compose_parser::{DockerImageDetails, construct_docker_image_details_map},
+        build_or_pull_and_start_image_in_conatiner, check_and_start_network_containers,
+    },
+    logs::service_logs::general_message,
+    utils::compose_parser::{DockerImageDetails, construct_docker_image_details_map},
 };
-
 
 // the docker-compose file can be of this name only , else its an error
 pub const FILE_NAMES: [&str; 6] = [
@@ -57,16 +56,23 @@ pub enum ContainerInspectType {
  */
 pub async fn yaml_parser(
     file_path: impl Into<String>,
-    app_state: Arc<cli_memory>,
+    app_state: Arc<CliMemory>,
 ) -> Result<(), CliErrors> {
     let file_pathh = file_path.into();
+
+    // project network and labels(so as to add all containers under 1 folder in docker ui , like docker compose do)
+    // we are using current folder der name as label and network name
+    let current_dir_name = file_name(&file_pathh, FilePathType::CurrentDir)?;
+
+
+    // saving the current used/default network in state , so as to used anywhere
+    let mut app_state_saved_network = app_state.current_network.lock().await;
+    *app_state_saved_network = Some(current_dir_name.to_owned());
+
 
     let docker =
         Docker::connect_with_local_defaults().map_err(|e| CliErrors::new(e.to_string()))?;
 
-    // project network and labels(so as to add all containers under 1 folder in docker ui , like docker compose do)
-    // we are using current folder der name as label and network name
-    let current_dir_name = file_name("", FilePathType::CurrentDir)?;
 
     // constructing labels for this project
     let mut this_project_labels = create_lables(&current_dir_name).await?;
@@ -100,10 +106,14 @@ pub async fn yaml_parser(
         // creating network for this project , so that all the conatiners can be in this network and can communicate with each other
         let this_project_network = create_network(&docker, &current_dir_name).await?;
 
+        general_message(
+            &current_dir_name,
+            "A default network has been created for all containers, and now each container will now be connected to this network",
+        );
+
         // loop over service , and start the images in conatiner 1 by 1
         // if build = . , build current folder , if image name , then pull/build image accordingly
         for ser in service_vec {
-
             // build/pull the image and start it in a container
             build_or_pull_and_start_image_in_conatiner(
                 &docker,
@@ -127,13 +137,7 @@ pub async fn yaml_parser(
  */
 pub fn validate_file_path(
     i_file_path: &str,
-) -> Result<
-    (
-        HashMap<String, DockerImageDetails>,
-        Vec<String>,
-    ),
-    CliErrors,
-> {
+) -> Result<(HashMap<String, DockerImageDetails>, Vec<String>), CliErrors> {
     let file_path = Path::new(i_file_path);
     // string to file path
     let file_name = file_name(i_file_path, FilePathType::FilePath)?;
@@ -160,7 +164,7 @@ pub fn validate_file_path(
     let services = &compose_content.services;
 
     // vec and hashmap of sorted serivces
-    let ans = construct_docker_image_details_map(&services.0).map_err(|e| e)?;
+    let ans = construct_docker_image_details_map(&services.0 , &i_file_path).map_err(|e| e)?;
 
     Ok((ans.0, ans.1))
 }

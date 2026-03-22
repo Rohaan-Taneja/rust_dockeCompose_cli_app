@@ -6,7 +6,7 @@ use bollard::secret::{BuildInfo, CreateImageInfo};
 use dashmap::DashMap;
 use owo_colors::OwoColorize;
 
-use crate::cli_memory;
+use crate::CliMemory;
 
 #[derive(Clone, Copy)]
 pub enum ServiceColor {

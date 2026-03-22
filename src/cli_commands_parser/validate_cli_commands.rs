@@ -6,7 +6,7 @@ use docker_compose_types::Compose;
 
 use crate::{
     cli_errors::CliErrors,
-    cli_memory,
+    CliMemory,
     docker::{
         container_logs::container_logs, container_status::docker_conatiner_status, delete_container::delete_container, start_images_in_container::build_remote_git_repo, stop_container::stop_container
     },
@@ -63,7 +63,7 @@ pub async fn validate_command(
     cli_name: String,
     cli_command: String,
     argument: String, //docker compose file path
-    app_state: Arc<cli_memory>,
+    app_state: Arc<CliMemory>,
 ) -> Result<bool, CliErrors> {
     if cli_name != CliName::DockYard.to_string() {
         return Err(CliErrors::wrong_cli_name());
@@ -76,7 +76,7 @@ pub async fn validate_command(
     match equivalent_command_enum {
         CliCommands::Up => {
             // here argument is the docker compose.yaml file path
-            yaml_parser(&argument, app_state).await.map_err(|e| e)?;
+            yaml_parser(&argument, Arc::clone(&app_state)).await.map_err(|e| e)?;
         }
         CliCommands::Down => {
             println!(

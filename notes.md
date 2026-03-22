@@ -185,9 +185,15 @@ did not do anything , office procrastination
 resolved the docker build stages bug (if using curl , add that as dependecy in the project)  ✅
 added errror displaying part in health check , if we get any error , not just pollling and showing unhealthy , let user know whast the issue  ✅
 
-<!-- todo -->
-9) improve dockerfile of the project , it should not download crated on evry image run , it should reuse them and boot up fast ❓ (thu). , did on thu and sat(debugging) ✅
 
+<!-- todo -->
+10) handle ctrl + c command ❓❓ (thu)
+
+<!-- temp files are been created while building , so we need to add , delete after build , see that , none named files -->
+
+11) clap ka use properly we are using enum way , see what can be imporved in that ❓❓(fri)
+
+12) make it a cli app and publish and test it locally (sat sun)
 
 
 
@@ -199,18 +205,11 @@ in docker => if network is not provided , docker use default network (current_di
 
 
 
-10) handle ctrl + c command ❓❓ (thu)
-
-5) env given ❓❓ (fri)
-
-11) clap ka use properly we are using enum way , see what can be imporved in that ❓❓(fri)
-
-12) make it a cli app and publish and test it locally (sat sun)
-
-13) show error in by asking ai , explain the error here in cli only
 
 
 <!-- done -->
+9) improve dockerfile of the project , it should not download crated on evry image run , it should reuse them and boot up fast ❓ (thu). , did on thu and sat(debugging) ✅
+
 2) then see how to build when git repo is provided ❓❓ ✅ 
 
 4) how all. containers are present in 1 group only ❓ ✅ ()via labels hashmap , that we add in each container (by default docker take label.project as current dir name)

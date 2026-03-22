@@ -8,6 +8,7 @@ bollard = "0.20.1"
 bytes = "1.11.1"
 chrono = "0.4.43"
 clap = { version = "4.5.58", features = ["derive"] }
+ctrlc = {version = "3.5.2" , features = ["termination"]} 
 dashmap = "6.1.0"
 docker-compose-types = "0.22.0"
 futures-util = "0.3.32"

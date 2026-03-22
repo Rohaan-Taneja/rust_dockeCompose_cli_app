@@ -15,7 +15,6 @@ use crate::{
  * it will take cont name ir id and show all the logs till now of the cont
  */
 pub async fn container_logs(cont_name: String) -> Result<bool, CliErrors> {
-    println!("i came here");
 
     let docker =
         Docker::connect_with_local_defaults().map_err(|e| CliErrors::new(e.to_string()))?;

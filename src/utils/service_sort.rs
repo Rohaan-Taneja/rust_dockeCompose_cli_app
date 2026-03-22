@@ -18,6 +18,7 @@ pub fn sort_services(
     service_vec: &mut Vec<String>,
     service_map: &mut HashMap<String, DockerImageDetails>,
     services_index_map: &IndexMap<String, Option<Service>>,
+    i_file_path : &str
 ) -> Result<bool, CliErrors> {
     // if. we come to same node which we came acroos just now in this flow , this measn there is a cycle
     // so this cannot be resolved
@@ -57,6 +58,7 @@ pub fn sort_services(
                         service_vec,
                         service_map,
                         services_index_map,
+                        i_file_path
                     )
                     .map_err(|e| e)?;
                 }
@@ -73,6 +75,7 @@ pub fn sort_services(
                         service_vec,
                         service_map,
                         services_index_map,
+                        i_file_path
                     )
                     .map_err(|e| e)?;
                 }
@@ -82,7 +85,7 @@ pub fn sort_services(
 
     // adding service to our data structure for our usage
     service_vec.push(service.to_string());
-    add_service_to_service_map(service, service_map, services_index_map).map_err(|e| e)?;
+    add_service_to_service_map(service, service_map, services_index_map , i_file_path).map_err(|e| e)?;
 
     // since we have already gone though it , so adding , so that if comes again , we can directly return okay and not traverse again
     visited_vec.insert(service.to_owned());

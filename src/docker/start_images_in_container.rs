@@ -22,7 +22,7 @@ use std::{collections::HashMap, pin::Pin, thread::sleep, time::Duration, vec};
 use tokio::process::Command;
 use tokio_util::io::ReaderStream;
 
-use crate::cli_memory;
+use crate::CliMemory;
 use crate::docker::delete_container::{list_all_filter_conatiners, validate_network};
 use crate::logs::service_logs::{
     general_error_message, service_logs, service_logs_messages, service_started,
@@ -48,7 +48,7 @@ pub async fn build_current_folder_image(
     cont_port: Option<String>,
     this_project_labels: &mut HashMap<String, String>,
     this_project_network: &NetworkingConfig,
-    app_state: Arc<cli_memory>,
+    app_state: Arc<CliMemory>,
 ) -> Result<bool, CliErrors> {
     // we can change it according input provided
     let to_be_built_image_tag = image_tag.to_string();
@@ -112,7 +112,7 @@ pub async fn pull_image_locally(
     docker: &Docker,
     service_name: String,
     image_name: String,
-    app_state: Arc<cli_memory>,
+    app_state: Arc<CliMemory>,
 ) -> Result<bool, CliErrors> {
     let image_options = Some(CreateImageOptions {
         from_image: Some(image_name.to_string()),
@@ -254,7 +254,7 @@ pub async fn start_image_in_container(
     cont_port: Option<String>,
     network_config: &NetworkingConfig,
     labels: &mut HashMap<String, String>,
-    app_state: Arc<cli_memory>,
+    app_state: Arc<CliMemory>,
 ) -> Result<bool, CliErrors> {
     service_logs_messages(&service_name, "starting image in conatiner");
 
@@ -414,10 +414,6 @@ pub async fn container_status(
     container_id: &str,
     inspect_type: &ContainerInspectType,
 ) -> Result<String, CliErrors> {
-    // when we are polling the container , where we are telling that we have to pol this url
-    // see that , understand that
-
-    // println!("this is the inspect type {:?}", inspect_type);
     // polling and getting conatiner status
     let container_inspect_response = docker
         .inspect_container(
@@ -437,10 +433,6 @@ pub async fn container_status(
         })?
         .state
         .ok_or_else(|| CliErrors::new("getting none while inspecting the conatiner".to_string()))?;
-
-    // let ans = container_inspect_response.health
-
-    // println!("this is the inspect respo {:?}" );
 
     // match inspect type , whetehr we want to check just running conatiner
     // or check if the service is healthy/running or not
@@ -465,12 +457,14 @@ pub async fn container_status(
         ContainerInspectType::Health(polling_details) => {
             let ans_health = match container_inspect_response.health {
                 Some(health_status) => {
-
                     // printing logs of health of the service
                     match health_status.log {
                         Some(log_vec) => {
                             for h_c in log_vec {
-                                let output = format!( " \n \n {} \n \n" ,h_c.output.unwrap_or("none".to_owned()) );
+                                let output = format!(
+                                    " \n \n {} \n \n",
+                                    h_c.output.unwrap_or("none".to_owned())
+                                );
                                 general_error_message(&service_name, &output);
                             }
                         }
@@ -571,12 +565,10 @@ pub async fn check_and_start_network_containers(
     service_map: &HashMap<String, DockerImageDetails>,
     this_project_labels: &mut HashMap<String, String>,
     this_project_network: &NetworkingConfig,
-    app_state: Arc<cli_memory>,
+    app_state: Arc<CliMemory>,
 ) -> Result<bool, CliErrors> {
     // hashmap for service_name -> conatiner_id
     let mut service_to_cont_id_map = HashMap::<String, String>::new();
-
-    println!("hello i am here");
 
     // if network is valid/exist , the move formward , else
     match validate_network(docker, network_id).await {
@@ -633,20 +625,12 @@ pub async fn check_and_start_network_containers(
             let service = l.get("com.docker.compose.service").unwrap();
 
             service_to_cont_id_map.insert(service.to_owned(), cont_id.to_owned());
-            println!(
-                "this is the service name ={:?} for conatiner = {:?} \n \n",
-                service, &cont_id
-            );
         } else {
             return Err(CliErrors::new(
                 "the service name is not present , internal error".to_owned(),
             ));
         }
     }
-    println!(
-        "this is the map of service -> container id {:?}",
-        &service_to_cont_id_map
-    );
 
     // now looping over service vec , in which we have to restart the containers
     // ser is present in (ser -> connt) mapping , then we are restarting that cont
@@ -714,7 +698,7 @@ pub async fn build_or_pull_and_start_image_in_conatiner(
     service_map: &HashMap<String, DockerImageDetails>,
     this_project_labels: &mut HashMap<String, String>,
     this_project_network: &NetworkingConfig,
-    app_state: Arc<cli_memory>,
+    app_state: Arc<CliMemory>,
 ) -> Result<(), CliErrors> {
     let current_image_details = service_map
         .get(&ser)
@@ -809,12 +793,6 @@ pub async fn build_or_pull_and_start_image_in_conatiner(
                 .await?;
             }
 
-            println!(
-                "image = {} , details {:?}",
-                image_name,
-                service_map.get(&ser)
-            );
-
             start_image_in_container(
                 &docker,
                 &container_name,
@@ -849,7 +827,7 @@ pub async fn build_remote_git_repo(
     cont_port: Option<String>,
     this_project_labels: &mut HashMap<String, String>,
     this_project_network: &NetworkingConfig,
-    app_state: Arc<cli_memory>,
+    app_state: Arc<CliMemory>,
 ) -> Result<bool, CliErrors> {
     let temp_path = "./temp/git_pull";
 
@@ -894,7 +872,6 @@ pub async fn build_remote_git_repo(
         }
     }
 
-    println!("i came here");
     start_image_in_container(
         &docker,
         container_name,
@@ -911,8 +888,6 @@ pub async fn build_remote_git_repo(
 
     // deleteing the temp folder created for temp build
     fs::remove_dir_all("./temp").map_err(|e| CliErrors::new(e.to_string()))?;
-
-
 
     Ok(true)
 }

@@ -1,22 +1,26 @@
+#![allow(warnings)]
+
 pub mod cli_errors;
 use std::sync::Arc;
 
 use clap::Parser;
 use dashmap::DashMap;
 use owo_colors::OwoColorize;
+use tokio::{signal, sync::Mutex};
 
-//
 use crate::{
     cli_commands_parser::validate_cli_commands::validate_command,
     cli_errors::CliErrors,
+    docker::stop_container::{self, stop_container},
     logs::init_logs::{self, init_logging},
+    yaml_parser::{FilePathType, file_name},
 };
 pub mod cli_commands_parser;
 pub mod docker;
 
 pub mod logs;
-pub mod yaml_parser;
 pub mod utils;
+pub mod yaml_parser;
 
 /**
  * argument can a file_path/network_name
@@ -28,34 +32,43 @@ pub struct CLI {
     argument: String,
 }
 
-pub struct cli_memory {
+pub struct CliMemory {
     pub service_map: DashMap<String, usize>,
+    pub current_network: Mutex<Option<String>>,
 }
 
 #[tokio::main]
 async fn main() -> Result<(), CliErrors> {
-    // init_logging();
-
     let image_map = DashMap::<String, usize>::new();
 
-    let app_state = Arc::new(cli_memory {
+    let mut app_state = Arc::new(CliMemory {
         service_map: image_map,
+        current_network: Mutex::new(None), // now known at this time
     });
 
-    // how to share dashmap between multiple services
-    // we need to see that
+    // tokio is running multiple service paralleley
+    // app is ruuning , as well as detecting ctrl+c is also parallely running
+    tokio::select! {
 
-    // we need to create a sahred hashmap , which we can use from anywhere
-    // since multiple threads can try to change the data at once
-    // so to make it safe , we will put it in arc
-    // plus mutex , to create lock ststem
-    // but lock service will stop other all threads to either read or write
-    // so better apporach is , rw map , buthere also , also if multiple thread want to write (even if multiple things ) , it will stop
-    // so more better version is dashmap
-    // it will divide the hasmap in multiple parts , and hece it will stop only those threads which want to change + or add same thing
+        _ = run_app(Arc::clone(&app_state)) =>{},
+        _ = signal::ctrl_c() =>{
+            println!("ctrl +c is detected , stopping all containers of current running process network and label");
+            cleanup(Arc::clone(&app_state)).await;
 
+        }
+
+    }
+
+    Ok(())
+}
+
+/**
+ * whole cli app
+ */
+pub async fn run_app(app_state: Arc<CliMemory>) -> Result<(), CliErrors> {
     let cli = CLI::parse();
 
+    // validate the cli command and check argument and do the task
     validate_command(
         cli.cli_name,
         cli.cli_command,
@@ -65,6 +78,24 @@ async fn main() -> Result<(), CliErrors> {
     .await?;
 
     Ok(())
+}
 
-    // println!("this is the cli name = {:?} , comand name = {:?} , file path = {} " , cli.cli_name , cli.cli_command , cli.file_path);
+/**
+ * if ctrl +c is clicked anywhere in between the process of running app , tokio::signal::ctrl_c() will detect it and call this function
+ * and we will stop all the container
+ *
+ * mainly it is for when we are starting/restarting the conatiners
+ * else where it does not affect that much
+ */
+pub async fn cleanup(app_state: Arc<CliMemory>) -> Result<(), CliErrors> {
+    match app_state.current_network.lock().await.clone() {
+        Some(network_name) => {
+            stop_container(&network_name.clone()).await;
+        }
+        None => {
+            // network name is not present , so we do not do anything
+        }
+    };
+
+    Ok(())
 }

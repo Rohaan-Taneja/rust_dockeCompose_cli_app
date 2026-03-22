@@ -28,6 +28,7 @@ pub struct DockerImageDetails {
 
 pub fn construct_docker_image_details_map(
     services_index_map: &IndexMap<String, Option<Service>>,
+    i_file_path : &str
 ) -> Result<(HashMap<String, DockerImageDetails>, Vec<String>), CliErrors> {
     let mut service_map = HashMap::<String, DockerImageDetails>::new();
 
@@ -49,6 +50,7 @@ pub fn construct_docker_image_details_map(
             &mut service_vec,
             &mut service_map,
             services_index_map,
+            i_file_path
         )
         .map_err(|e| e)?;
     }
@@ -64,6 +66,7 @@ pub fn add_service_to_service_map(
     service_name: &str,
     service_map: &mut HashMap<String, DockerImageDetails>,
     services_details_index_map: &IndexMap<String, Option<Service>>,
+    i_file_path : &str
 ) -> Result<bool, CliErrors> {
     let compose_service_data = services_details_index_map
         .get(service_name)
@@ -87,7 +90,7 @@ pub fn add_service_to_service_map(
     let mut container_name = compose_service_data.container_name;
 
     // we are extracting folder name of this project
-    let file_name = file_name("" , FilePathType::CurrentDir)?;
+    let file_name = file_name(i_file_path , FilePathType::CurrentDir)?;
 
     // projectName_service_name
     if image_name.is_none() {
