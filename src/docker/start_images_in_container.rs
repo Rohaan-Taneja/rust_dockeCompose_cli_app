@@ -59,6 +59,7 @@ pub async fn build_current_folder_image(
     let build_image_options = bollard::query_parameters::BuildImageOptionsBuilder::default()
         .dockerfile("Dockerfile")
         .t(&to_be_built_image_tag)
+        .rm(true)
         .pull("true");
 
     // geting the tar stream of this folder/project , if service is (build : .)
@@ -103,6 +104,8 @@ pub async fn build_current_folder_image(
 
     Ok(true)
 }
+
+
 
 /**
  * @input  => local docker referece and image to pull from docker

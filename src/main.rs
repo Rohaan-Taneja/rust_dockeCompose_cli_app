@@ -1,7 +1,7 @@
 #![allow(warnings)]
 
 pub mod cli_errors;
-use std::sync::Arc;
+use std::{fs, path::Path, sync::Arc};
 
 use clap::Parser;
 use dashmap::DashMap;
@@ -13,7 +13,7 @@ use crate::{
     cli_errors::CliErrors,
     docker::stop_container::{self, stop_container},
     logs::init_logs::{self, init_logging},
-    yaml_parser::{FilePathType, file_name},
+    yaml_parser::{FilePathType, file_name, validate_file_path},
 };
 pub mod cli_commands_parser;
 pub mod docker;
@@ -91,6 +91,14 @@ pub async fn cleanup(app_state: Arc<CliMemory>) -> Result<(), CliErrors> {
     match app_state.current_network.lock().await.clone() {
         Some(network_name) => {
             stop_container(&network_name.clone()).await;
+
+            // deleting temp folder (created during repoto git pull), if exist
+            let path = Path::new("./temp");
+            if path.is_dir() {
+                println!("Folder exists.");
+                // deleteing the temp folder created for temp build
+                fs::remove_dir_all("./temp").map_err(|e| CliErrors::new(e.to_string()))?;
+            }
         }
         None => {
             // network name is not present , so we do not do anything
