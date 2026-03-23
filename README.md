@@ -1,4 +1,4 @@
-# DockYard 🐳
+<img width="1678" height="943" alt="Screenshot 2026-03-23 at 7 53 29 PM" src="https://github.com/user-attachments/assets/afe3baa9-c9d7-4d3e-bd72-edf48aa81507" /># DockYard 🐳
 
 **Your lightweight, Rust-powered Docker Compose CLI**
 
@@ -37,6 +37,9 @@ The install script detects your OS and architecture, downloads the right binary,
 > **Note:** Currently only macOS (amd64) is supported. Builds for Linux and other architectures are on the way.
 
 <img width="1521" height="251" alt="Screenshot 2026-03-23 at 7 48 58 PM" src="https://github.com/user-attachments/assets/929dde92-fc32-461d-baec-9590eb544c2b" />
+
+
+
 
 
 ---
@@ -82,10 +85,15 @@ Running the same command again will **restart** all the containers.
 <img width="1703" height="956" alt="Screenshot 2026-03-23 at 7 49 49 PM" src="https://github.com/user-attachments/assets/02136c9c-ca38-4d01-a193-4e814d0f0598" />
 
 
+---
+
 <img width="1700" height="945" alt="Screenshot 2026-03-23 at 7 51 42 PM" src="https://github.com/user-attachments/assets/1c2a8689-14c0-4cbc-ba62-9ec8d13900c1" />
 
 
 ---
+
+
+
 
 ### Stopping containers
 
@@ -94,6 +102,14 @@ dockyard DockYard Stop <network_id>
 ```
 
 Stops all running containers that belong to the network. The network ID is the same as the label assigned during `Up` — by default, it's the name of your current directory.
+
+
+<img width="1676" height="946" alt="Screenshot 2026-03-23 at 7 55 26 PM" src="https://github.com/user-attachments/assets/28ec2d85-5669-49c5-942a-e49268e2d567" />
+
+
+
+
+
 
 ---
 
@@ -105,6 +121,9 @@ dockyard DockYard Down <network_id>
 
 Stops and removes all containers in the network.
 
+<img width="1709" height="970" alt="Screenshot 2026-03-23 at 7 59 54 PM" src="https://github.com/user-attachments/assets/1bbc56c9-1322-4f41-a531-e98f4a4a7d1b" />
+
+
 ---
 
 ### Viewing logs
@@ -115,7 +134,14 @@ dockyard DockYard Logs <container_id>
 
 Streams all logs for a container from start to finish. Each service gets its own colour in the terminal so you can tell them apart at a glance.
 
+
+<img width="1704" height="958" alt="Screenshot 2026-03-23 at 7 57 21 PM" src="https://github.com/user-attachments/assets/cb9c0781-754c-4bf8-b3ff-f6a4998782c4" />
+
+
+
+
 ---
+
 
 ### Checking container status
 
@@ -165,6 +191,10 @@ Restart Policy
 Policy        : no
 Restart Count : 0
 ```
+
+<img width="1705" height="931" alt="Screenshot 2026-03-23 at 7 58 43 PM" src="https://github.com/user-attachments/assets/568b8fd9-393b-4e31-b4e8-404c66734f8e" />
+
+
 
 ---
 
