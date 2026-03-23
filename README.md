@@ -1,5 +1,3 @@
-<img width="1678" height="943" alt="Screenshot 2026-03-23 at 7 53 29 PM" src="https://github.com/user-attachments/assets/afe3baa9-c9d7-4d3e-bd72-edf48aa81507" /># DockYard 🐳
-
 **Your lightweight, Rust-powered Docker Compose CLI**
 
 I built DockYard because I wanted a super-simple, fast, and reliable way to spin up multi-container apps without the full weight of Docker Compose. It’s written in Rust, handles dependencies smartly, respects health checks, streams colored logs, and even cleans up gracefully when you hit Ctrl+C. 
@@ -265,6 +263,14 @@ When streaming logs from multiple services, each one is printed with a distinct 
 ### Ctrl+C handling
 
 If you hit `Ctrl+C` while containers are starting up, DockYard will catch the signal and stop all containers cleanly before exiting. Nothing gets left running in a half-started state.
+
+
+<img width="1710" height="959" alt="Screenshot 2026-03-23 at 8 02 15 PM" src="https://github.com/user-attachments/assets/2d678fdb-7ab3-443c-8b00-5d9185fc9898" />
+
+
+
+
+
 
 ### Error handling
 
