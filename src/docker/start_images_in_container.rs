@@ -16,11 +16,17 @@ use git2::Repository;
 use http_body_util::StreamBody;
 use humantime::parse_duration;
 use hyper::body::Frame;
-use std::fs;
+use std::io::Write;
 use std::sync::Arc;
+use std::sync::mpsc::SyncSender;
 use std::{collections::HashMap, pin::Pin, thread::sleep, time::Duration, vec};
+use std::{fs, io};
+use tar::Builder;
 use tokio::process::Command;
+use tokio::sync::mpsc;
+use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::io::ReaderStream;
+use walkdir::WalkDir;
 
 use crate::CliMemory;
 use crate::docker::delete_container::{list_all_filter_conatiners, validate_network};
@@ -105,8 +111,6 @@ pub async fn build_current_folder_image(
     Ok(true)
 }
 
-
-
 /**
  * @input  => local docker referece and image to pull from docker
  * @result => we will pull the image from the docker hub ans start in the conatiner
@@ -173,76 +177,116 @@ pub async fn check_image_locally(docker: &Docker, image_tag_name: &str) -> Resul
  * tar file chunks loads 1 by 1 in memory and send to docker api
  * so no big file converted to tar loaded in meory , no meory spikes , chunk by chunk approach is better that converting and loading all project in temp memory at once
  */
-pub fn convert_current_folder_to_tar_stream() -> Result<
-    StreamBody<Pin<Box<dyn Stream<Item = Result<Frame<Bytes>, std::io::Error>> + Send>>>,
+
+
+struct ChannelWriter {
+    tx: std::sync::mpsc::SyncSender<Result<Bytes, io::Error>>,
+}
+
+impl Write for ChannelWriter {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        let bytes = Bytes::copy_from_slice(buf);
+        self.tx
+            .send(Ok(bytes))
+            .map_err(|_| io::Error::new(io::ErrorKind::BrokenPipe, "channel closed"))?;
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+
+fn folder_to_tar_stream(
+    base_path: &str,
+) -> Result<
+    StreamBody<Pin<Box<dyn Stream<Item = Result<Frame<Bytes>, io::Error>> + Send>>>,
     CliErrors,
 > {
-    // we are using sytem tar command to create current folder to tar and stream it
-    let mut child = Command::new("tar")
-        .arg("--no-xattrs")
-        .arg("--exclude=target") //we are excluding target folder and git folder manually
-        .arg("--exclude=.git")
-        .arg("--no-acls")
-        .arg("--no-fflags")
-        .arg("-cf")
-        .arg("-")
-        .arg(".") //the folder that we want to create tar and stream
-        .stdout(std::process::Stdio::piped())
-        .spawn()
-        .map_err(|e| CliErrors::new(e.to_string()))?;
+    let base_path = base_path.to_string();
+    let (tx, rx) = std::sync::mpsc::sync_channel::<Result<Bytes, io::Error>>(32);
 
-    // some tar it got , it recievs it and it is treamed via readerstream
-    let stdout = child
-        .stdout
-        .take()
-        .ok_or_else(|| CliErrors::new("Failed to capture tar stdout".to_string()))?;
+    std::thread::spawn(move || {
+        let writer = ChannelWriter { tx };
+        let mut tar = Builder::new(writer);
 
-    // it reads the small chunks and emit them out
-    let stream = ReaderStream::new(stdout).map(|result| result.map(Frame::data));
+        for entry in WalkDir::new(&base_path)
+            .follow_links(false)
+            .into_iter()
+            .filter_entry(|e| {
+                // Prune these directories entirely before descending
+                let name = e.file_name().to_string_lossy();
+                name != ".git"
+                    && name != "target"
+                    && name != ".DS_Store"
+                    && name != "node_modules"
+            })
+            .filter_map(Result::ok)
+        {
+            let path = entry.path();
+
+            let rel_path = match path.strip_prefix(&base_path) {
+                Ok(p) => p.to_path_buf(),
+                Err(_) => continue,
+            };
+
+            // Skip root itself
+            if rel_path.as_os_str().is_empty() {
+                continue;
+            }
+
+            let ft = entry.file_type();
+
+            if ft.is_file() {
+                match std::fs::File::open(path) {
+                    Ok(mut file) => {
+                        if let Err(e) = tar.append_file(&rel_path, &mut file) {
+                            if e.kind() == io::ErrorKind::BrokenPipe {
+                                return;
+                            }
+                            eprintln!("Failed to append file {:?}: {}", rel_path, e);
+                        }
+                    }
+                    Err(e) => eprintln!("Failed to open {:?}: {}", path, e),
+                }
+            } else if ft.is_dir() {
+                if let Err(e) = tar.append_dir(&rel_path, path) {
+                    if e.kind() == io::ErrorKind::BrokenPipe {
+                        return;
+                    }
+                    eprintln!("Failed to append dir {:?}: {}", rel_path, e);
+                }
+            }
+        }
+
+        if let Err(e) = tar.finish() {
+            eprintln!("Failed to finish tar archive: {}", e);
+        }
+    });
+
+    let stream = futures_util::stream::iter(rx.into_iter())
+        .map(|res| res.map(Frame::data));
 
     Ok(StreamBody::new(Box::pin(stream)))
+}
+
+// Only these two public functions — both call the same core
+pub fn convert_current_folder_to_tar_stream() -> Result<
+    StreamBody<Pin<Box<dyn Stream<Item = Result<Frame<Bytes>, io::Error>> + Send>>>,
+    CliErrors,
+> {
+    println!("Streaming current folder as tar archive");
+    folder_to_tar_stream(".")
 }
 
 pub fn convert_to_tar_stream(
     path: Option<&str>,
 ) -> Result<
-    StreamBody<Pin<Box<dyn Stream<Item = Result<Frame<Bytes>, std::io::Error>> + Send>>>,
+    StreamBody<Pin<Box<dyn Stream<Item = Result<Frame<Bytes>, io::Error>> + Send>>>,
     CliErrors,
 > {
-    let mut cmd = Command::new("tar");
-
-    cmd.arg("--exclude=target")
-        .arg("--exclude=.git")
-        .arg("--no-xattrs")
-        .arg("--no-acls")
-        .arg("--no-fflags")
-        .arg("-cf")
-        .arg("-");
-
-    // If path is provided → use it
-    // Otherwise → use current directory
-    if let Some(p) = path {
-        cmd.arg("-C").arg(p).arg(".");
-    } else {
-        cmd.arg(".");
-    }
-
-    let mut child = cmd
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::inherit())
-        .spawn()
-        .map_err(|e| CliErrors::new(e.to_string()))?;
-
-    let stdout = child
-        .stdout
-        .take()
-        .ok_or_else(|| CliErrors::new("Failed to capture tar stdout".to_string()))?;
-
-    let stream = ReaderStream::new(stdout).map(|result| result.map(Frame::data));
-
-    Ok(StreamBody::new(Box::pin(stream)))
+    folder_to_tar_stream(path.unwrap_or("."))
 }
-
 /**
  * @inputs => this function will recieve an image name/tag
  * @result => we will start that image in a container to specific port
@@ -392,6 +436,9 @@ pub async fn wait_until_conatiner_running(
                 if res == "running".to_owned() {
                     break;
                 }
+                else if res == "exited".to_owned() {
+                    break;
+                }
             }
             // if polling for healthy service , health should be healthy , if not , wait
             ContainerInspectType::Health(_) => {
@@ -450,6 +497,9 @@ pub async fn container_status(
 
             if ans_status == "running".to_string() {
                 service_logs_messages(&service_name, "image is running");
+            }
+            else if ans_status == "exited".to_string() {
+                service_logs_messages(&service_name, "container is exited");
             }
 
             let cont_status = format!(" image running in container , status = {}", ans_status);
