@@ -36,6 +36,9 @@ The install script detects your OS and architecture, downloads the right binary,
 
 > **Note:** Currently only macOS (amd64) is supported. Builds for Linux and other architectures are on the way.
 
+<img width="1521" height="251" alt="Screenshot 2026-03-23 at 7 48 58 PM" src="https://github.com/user-attachments/assets/929dde92-fc32-461d-baec-9590eb544c2b" />
+
+
 ---
 
 ## Commands
@@ -74,6 +77,13 @@ This will:
 - Start each container, waiting for health checks where specified
 
 Running the same command again will **restart** all the containers.
+
+
+<img width="1703" height="956" alt="Screenshot 2026-03-23 at 7 49 49 PM" src="https://github.com/user-attachments/assets/02136c9c-ca38-4d01-a193-4e814d0f0598" />
+
+
+<img width="1700" height="945" alt="Screenshot 2026-03-23 at 7 51 42 PM" src="https://github.com/user-attachments/assets/1c2a8689-14c0-4cbc-ba62-9ec8d13900c1" />
+
 
 ---
 
