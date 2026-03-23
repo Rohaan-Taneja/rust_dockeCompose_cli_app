@@ -1,3 +1,6 @@
+
+# DockYard 🐳
+
 **Your lightweight, Rust-powered Docker Compose CLI**
 
 I built DockYard because I wanted a super-simple, fast, and reliable way to spin up multi-container apps without the full weight of Docker Compose. It’s written in Rust, handles dependencies smartly, respects health checks, streams colored logs, and even cleans up gracefully when you hit Ctrl+C. 
